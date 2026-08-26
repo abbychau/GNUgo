@@ -107,25 +107,25 @@ applications implementing the controller end. Among the most interesting of
 these are:
 
 @itemize
-@item @file{regression/regress.awk}
+@item @file{tests/regress.awk}
 @quotation
 Script to run regressions. The script sends GTP commands to set up and
 evaluate positions to the engine and then analyzes the responses from
 the engine. More information about GTP based regression testing can be
 found in the regression chapter (@pxref{Regression}).
 @end quotation
-@item @file{regression/regress.pl}
+@item @file{tests/regress.pl}
 @quotation
 Perl script to run regressions, giving output which together with the
-CGI script @file{regression/regress.plx} generates HTML views of the
+CGI script @file{tests/regress.plx} generates HTML views of the
 regressions.
 @end quotation
-@item @file{regression/regress.pike}
+@item @file{tests/regress.pike}
 @quotation
 Pike script to run regressions. More feature-rich and powerful than
 @file{regress.awk}.
 @end quotation
-@item @file{regression/view.pike}
+@item @file{tests/view.pike}
 @quotation
 Pike script to examine a single regression testcase through a graphical
 board. This gives an easy way to inspect many of the GNU Go internals.

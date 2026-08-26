@@ -109,7 +109,7 @@
 #include "liberty.h"
 #include "gg_utils.h"
 #include "random.h"
-#include "../sgf/sgftree.h"
+#include "../src/sgf/sgftree.h"
 
 #define USAGE "\n\
 Usage: extract_fuseki files boardsize moves patterns handicap strength half_board min_pos_freq min_move_percent min_move_freq [output file]\n\

@@ -4,7 +4,7 @@ methods will be of interest to anyone working on the
 program, or simply curious about its workings.
 
 In practice, most tuning of GNU Go is done in conjunction
-with maintaining the @file{regression/} directory
+with maintaining the @file{tests/} directory
 (@pxref{Regression}).
 
 We assume that you have a game GNU Go played saved

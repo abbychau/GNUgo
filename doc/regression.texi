@@ -28,7 +28,7 @@ if a change breaks something.
 @node Regression Testing
 @section Regression testing in GNU Go
 
-Regression testing is performed by the files in the @file{regression/}
+Regression testing is performed by the files in the @file{tests/}
 directory. The tests are specified as GTP commands in files with the
 suffix @file{.tst}, with corresponding correct results and expected
 pass/fail status encoded in GTP comments following the test. To run a
@@ -39,7 +39,7 @@ Pike script @file{regress.pike} can also be used to run all tests or a
 subset of the tests.
 
 Game records used by the regression tests are stored in the
-directory @file{regression/games/} and its subdirectories.
+directory @file{tests/games/} and its subdirectories.
 
 @node Test Suites
 @section Test suites
@@ -239,8 +239,8 @@ you may get an ascii board with the coordinate grid using
 @section HTML Regression Views
 
 Extremely useful HTML Views of the regression tests may be
-produced using two perl scripts @file{regression/regress.pl}
-and @file{regression/regress.plx}.
+produced using two perl scripts @file{tests/regress.pl}
+and @file{tests/regress.plx}.
 
 @enumerate
 @item The driver program (regress.pl) which:
@@ -310,9 +310,9 @@ html views from.
 You will also need to install the Perl module GD
 (@url{http://search.cpan.org/dist/GD/}), available from CPAN.
 
-Finally, run @file{regression/regress.pl} to create the xml data used to
+Finally, run @file{tests/regress.pl} to create the xml data used to
 generate the html views (to do all regression tests run
-@file{regression/regress.pl -a 1}); then, copy the @file{html/} directory to
+@file{tests/regress.pl -a 1}); then, copy the @file{html/} directory to
 the same directory as @file{regress.plx} resides in.
 
 At this point, you should have a working copy of the html regression views.

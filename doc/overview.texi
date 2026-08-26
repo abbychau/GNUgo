@@ -343,13 +343,14 @@ if no move found yet, run @code{fill_liberty()}
 @node Roadmap
 @section Roadmap
 
-The GNU Go engine is contained in two directories, @file{engine/} and
+The GNU Go engine is contained in two directories, @file{src/engine/} and
 @file{patterns/}. Code related to the user interface, reading and
 writing of Smart Game Format files, and testing are found in the
-directories @file{interface/}, @file{sgf/}, and @file{regression/}. Code
-borrowed from other GNU programs is contained in @file{utils/}. That
+directories @file{src/interface/}, @file{src/sgf/}, and @file{tests/}. Code
+borrowed from other GNU programs is contained in @file{src/utils/}. That
 directory also includes some code developed within GNU Go which is not
-go specific. Documentation is in @file{doc/}.
+go specific. Documentation is in @file{doc/}. Auxiliary tools, Emacs
+modes, and board images live in @file{contrib/}.
 
 In this document we will describe some of the individual files comprising
 the engine code in @file{engine/} and @file{patterns/}. In @file{interface/} 

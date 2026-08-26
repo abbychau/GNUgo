@@ -7,10 +7,36 @@ you are interested in helping.
 
                           Installation
 
-In short, './configure; make' will build GNU Go; optionally (running
-as root) 'make install' will put it into /usr/local/bin and also
-install the man page. You also will probably want to install CGoban.
-See INSTALL for details.
+GNU Go is built with CMake. In short:
+
+    cmake -S . -B build
+    cmake --build build
+
+This produces the binary at build/src/interface/gnugo (gnugo.exe on
+Windows). Optionally (running as root) 'cmake --install build' will
+put it into /usr/local/bin and also install the man page. You also
+will probably want to install CGoban. See INSTALL for details.
+
+                          Source Layout
+
+    src/engine/     The Go engine (reading, owl, influence, patterns
+                    matching, monte carlo, ...)
+    src/interface/  The front ends (cli, GMP, GTP, solo, test) and the
+                    gtp/gmp protocol code
+    src/sgf/        Smart Game Format parsing library
+    src/utils/      Small portability/utility library
+    patterns/       The pattern database (.db/.dtr/.dbz/.sgf sources)
+                    and the code generators (mkpat, joseki, dfa, ...)
+                    that compile it into C at build time
+    tests/          Regression test suites (.tst), test drivers, and
+                    the SGF game records they use
+    contrib/        Emacs mode, XPM board images, GoImage Perl module,
+                    and GTP example programs
+    doc/            Texinfo manual and man page
+
+The pattern database is the heart of the program: the binary is built
+by running the tools in patterns/ over the .db/.dtr/.dbz files to
+generate C tables.
 
 
                          Documentation
@@ -158,8 +184,9 @@ gnugo --help.
      Print a help message describing the options. This will also
      tell you the defaults of various parameters, most importantly
      the level and cache size. The default values of these
-     parameters can be set before compiling by `configure'.  If
-     you forget the defaults you can find out using `--help'.
+     parameters can be set before compiling by editing
+     config.h.cmake.  If you forget the defaults you can find out
+     using `--help'.
 
 * `--level LEVEL'
      GNU Go can play with different strengths and speeds. Level 10
@@ -190,9 +217,8 @@ gnugo --help.
 
 * `-M', `--cache-size MEGS'
      Memory in megabytes used for hashing. The default size is 8
-     unless you configure gnugo with the command `configure
-     --enable-cache-size=SIZE' before compiling to make SIZE
-     the default.
+     unless you set DEFAULT_MEMORY in config.h.cmake before
+     compiling to make SIZE the default.
 
 
 * `--chinese-rules'
@@ -201,7 +227,7 @@ gnugo --help.
 
 * `--japanese-rules'
      Use Japanese Rules. This is the default unless you specify
-     `--enable-chinese-rules' as a configure option.
+     CHINESE_RULES 1 in config.h.cmake.
 
 * `--copyright': Display the copyright notice
 
@@ -230,14 +256,14 @@ found in the file COPYING, with the following exceptions.
 * The files gmp.c and gmp.h are copyright Bill Shubert. These
   are free for unrestricted use.
 
-* The files regression/golois/* and the tests vie.tst, connect.tst,
+* The files tests/golois/* and the tests vie.tst, connect.tst,
   capture.tst and global.tst are copyright Tristan Cazenave and are
   used with his permission
 
-* The SGF files in regression/games/handtalk are copyright Jessie Annala
+* The SGF files in tests/games/handtalk are copyright Jessie Annala
   and are used with permission.
 
-* The SGF files in regression/games/mertin13x13 are copyright Stefan
+* The SGF files in tests/games/mertin13x13 are copyright Stefan
   Mertin and are used with permission.
 
 * The remaining SGF files are either copyright by the FSF or are in

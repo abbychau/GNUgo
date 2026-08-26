@@ -2,9 +2,8 @@ In this chapter, we describe the principles of the GNU Go DFA
 pattern matcher.  The aim of this system is to permit a fast
 pattern matching when it becomes time critical like in owl
 module (@ref{The Owl Code}). Since GNU Go 3.2, this is enabled
-by default. You can still get back the traditional pattern matcher
-by running @command{configure --disable-dfa} and then recompiling
-GNU Go. 
+by default. The DFA tables are generated at build time by the tools
+in the @file{patterns/} directory.
 
 Otherwise, a finite state machine called a Deterministic Finite
 State Automaton (@ref{What is a DFA}) will be built off line from the

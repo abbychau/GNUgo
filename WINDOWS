@@ -3,20 +3,15 @@
 ==========================
 
 
-             BUILDING WITH OLDER VISUAL STUDIO
-
-The distribution directories contain some .dsp and .dsw files with
-GNU Go. These have been brought up to date in the sense that they
-should work if you have the older VC++ with Visual Studio 6
-but the distributed .dsp and .dsw files will only be of use with 
-older version of Visual Studio.
+             BUILDING WITH VISUAL STUDIO
 
 In most cases (unless you are building in Cygwin) the preferred way 
 to build GNU Go on Windows platforms is to use CMake. CMake
 understands about many versions of Visual C/Visual Studio, and will
 generate project/solution files for the tools installed on your
-system. So even if you have Visual Studio 6 you may use CMake
-and dispense with the distributed .dsp and .dsw files.
+system. The legacy Visual Studio 6 project files (.dsp/.dsw) have
+been removed from the distribution; use CMake to generate your
+project files.
 
 ==========================
 
@@ -92,7 +87,7 @@ targets, and it will compile the second and subsequent times.
 
 Which will successfully generate a gnugo.exe.
 
-    interface\gnugo.exe --options
+    src\interface\gnugo.exe --options
 
 ==========================
 
@@ -118,7 +113,7 @@ To build GNU Go, from a cmd.exe shell, run GNU Make (against the
 newly-created 'Makefile' and it's default 'all' target):
 
     mingw32-make
-    ..\interface\gnugo.exe --options
+    ..\src\interface\gnugo.exe --options
 
 ==========================
 
@@ -145,7 +140,7 @@ To build GNU Go, from a Bash shell, run GNU Make (against the
 newly-created 'Makefile' and it's default 'all' target):
 
     make
-    ../interface/gnugo.exe --options
+    ../src/interface/gnugo.exe --options
 
 To debug, use GDB, as the GCC-generated symbols won't work with 
 NTSD/Windbg/Visual Studio.
@@ -158,8 +153,8 @@ With Cygwin, you should be able to
 
   tar zxvf gnugo-3.8.tar.gz
   cd gnugo-3.8
-  env CC='gcc -mno-cygwin' ./configure
-  make
+  cmake -S . -B build
+  cmake --build build
 
 ==========================
 

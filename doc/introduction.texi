@@ -73,13 +73,13 @@ Documentation files (including this manual) are distributed under
 the GNU Free Documentation License (@pxref{GFDL}, version 1.3 or any later
 version).
 
-The files @file{regression/games/golois/*sgf} are copyright Tristan
+The files @file{tests/games/golois/*sgf} are copyright Tristan
 Cazenave and are included with his permission.
 
-The SGF files in @file{regression/games/handtalk/} are copyright Jessie Annala
+The SGF files in @file{tests/games/handtalk/} are copyright Jessie Annala
 and are used with permission.
 
-The SGF files in @file{regression/games/mertin13x13/} are copyright Stefan
+The SGF files in @file{tests/games/mertin13x13/} are copyright Stefan
 Mertin and are used with permission.
 
 The remaining SGF files are either copyright by the FSF or are in the public domain.

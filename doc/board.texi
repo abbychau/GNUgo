@@ -13,9 +13,9 @@ basic go board but no AI capability. One such program is
 databases from SGF files.
 
 If you want to use the board library in your own program, you need all
-the .c-files listed under libboard_SOURCES in engine/Makefile.am, and
-the files in the directories sgf/ and utils/. Then you should include
-engine/board.h in your code.
+the .c-files listed under the board target in src/engine/CMakeLists.txt,
+and the files in the directories src/sgf/ and src/utils/. Then you
+should include src/engine/board.h in your code.
 
 The library consists of the following files:
 

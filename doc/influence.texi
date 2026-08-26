@@ -665,7 +665,7 @@ We repeat this until the territory is shrunk so much that the opponent
 can no longer reach it.
 
 To see the break in code in action run GNU Go on the file
-@file{regression/games/break_in.sgf} with the option @code{-d0x102000}. Among
+@file{tests/games/break_in.sgf} with the option @code{-d0x102000}. Among
 the traces you will find:
 
 @example

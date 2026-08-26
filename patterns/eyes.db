@@ -4798,7 +4798,7 @@ Pattern 71011
 
 Pattern 71012
 # Defending the other marginal vertex is sometimes incorrect,
-# see regression/games/owl27.sgf.
+# see tests/games/owl27.sgf.
 
   )
 (..x.x

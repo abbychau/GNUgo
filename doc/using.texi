@@ -176,7 +176,7 @@ that you place the stones using the cursor arrow keys
 or with the mouse, and you can have a nice graphical display of the board
 within emacs.
 
-You will need the file @file{interface/gnugo.el}. There is
+You will need the file @file{contrib/gnugo.el}. There is
 a version of this distributed with GNU Go but it only
 works with Emacs 21. Most Emacsen are Emacs 22 however.
 Therefore you should get the latest version of
@@ -188,11 +188,11 @@ You will also need some xpm files for the graphical
 display. You can either use those distributed by
 Thien-Thi Nguyen (at the first URL above) or those
 distributed with GNU Go, either the file
-@file{interface/gnugo-xpms.el} or (for high resolution
-displays) @file{interface/gnugo-big-xpms.el}.
+@file{contrib/gnugo-xpms.el} or (for high resolution
+displays) @file{contrib/gnugo-big-xpms.el}.
 
-Load the file @file{interface/gnugo.el} and 
-@file{interface/gnugo-xpms.el}. You may do this using the 
+Load the file @file{contrib/gnugo.el} and 
+@file{contrib/gnugo-xpms.el}. You may do this using the 
 Emacs @command{M-x load-file} command.
 
 When you start a game with @command{M-x gnugo},

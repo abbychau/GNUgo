@@ -1141,7 +1141,7 @@ following example.
 gnugo --quiet -l connection3.sgf --decide-connection M3/N7 -o vars.sgf
 @end example
 
-(The file @file{connection3.sgf} is in @file{regression/games}.)
+(The file @file{connection3.sgf} is in @file{tests/games}.)
 Examine the sgf file produced by this to see what kind of reading
 is done by the functions @code{string_connect()} and
 @code{string_disconnect()}, which are called by the function
