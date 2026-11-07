@@ -1,6 +1,6 @@
 {
   "name": "@abbychau/gnugo-wasm",
-  "version": "3.8.0",
+  "version": "3.8.1",
   "description": "GNU Go 3.8 compiled to WebAssembly: play and analyze Go in the browser via a Web Worker and a Promise-based GTP API.",
   "keywords": ["go", "baduk", "weiqi", "gnugo", "gtp", "webassembly", "wasm", "sgf"],
   "license": "GPL-3.0-or-later",
