@@ -1394,7 +1394,11 @@ fast_disconnect(int str1, int str2, int *move)
   }
 
   modify_depth_values(-3);
-  connection_node_limit /= 4;
+  /* Halve rather than quarter the node limit: the old /4 made
+   * recursive_disconnect2 hit its node ceiling almost immediately
+   * and then return WIN ("can be cut") as a pure fallback, which
+   * polluted owl's perception of already-cut strings.  */
+  connection_node_limit /= 2;
 
   if (verbose > 0)
     verbose--;
@@ -2136,11 +2140,17 @@ recursive_disconnect2(int str1, int str2, int *move, int has_passed)
   
   if (nodes_connect > connection_node_limit) {
     SGFTRACE2(PASS_MOVE, WIN, "connection node limit reached");
+    if (debug & DEBUG_READING)
+      gprintf("RC2 node limit %1m %1m (%d>%d) -> WIN\n", str1, str2,
+              nodes_connect, connection_node_limit);
     return WIN;
   }
   
   if (stackp > connect_depth2) {
     SGFTRACE2(PASS_MOVE, WIN, "connection depth limit reached");
+    if (debug & DEBUG_READING)
+      gprintf("RC2 depth limit %1m %1m (stackp %d > %d) -> WIN\n", str1, str2,
+              stackp, connect_depth2);
     return WIN;
   }
 

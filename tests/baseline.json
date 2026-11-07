@@ -1,0 +1,65 @@
+{
+  "atari_atari.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 4,
+    "pass": 23,
+    "unexpected_pass": 1
+  },
+  "capture.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 5,
+    "pass": 13,
+    "unexpected_pass": 0
+  },
+  "connect.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 6,
+    "pass": 75,
+    "unexpected_pass": 0
+  },
+  "endgame.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 14,
+    "pass": 50,
+    "unexpected_pass": 0
+  },
+  "owl.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 25,
+    "pass": 236,
+    "unexpected_pass": 0
+  },
+  "reading.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 41,
+    "pass": 193,
+    "unexpected_pass": 0
+  },
+  "semeai.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 27,
+    "pass": 119,
+    "unexpected_pass": 0
+  },
+  "tactics.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 2,
+    "pass": 3,
+    "unexpected_pass": 0
+  },
+  "tiny.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 3,
+    "pass": 19,
+    "unexpected_pass": 0
+  }
+}
