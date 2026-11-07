@@ -54,7 +54,11 @@
       <label>Level <select id="level"></select></label>
       <label>Komi <select id="komi"><option>0.5</option><option>5.5</option><option selected>6.5</option><option>7.5</option></select></label>
     </div>
+    <label>Time per move
+      <select id="time"><option value="0">No limit</option><option value="2">~2 s</option><option value="5" selected>~5 s</option><option value="10">~10 s</option></select>
+    </label>
     <button id="new" class="primary" disabled>New game</button>
+    <button id="stop" hidden>Move now</button>
     <div class="row">
       <button id="pass" disabled>Pass</button>
       <button id="undo" disabled>Undo</button>
@@ -72,6 +76,7 @@ for (let i = 0; i <= 10; i++) $("level").add(new Option(i, i, false, i === 6));
 
 let go, size = 19, human = "black", busy = true, over = false;
 let stones = { black: [], white: [] }, last = null, passes = 0;
+let moves = [];          // colors of the moves played so far, for undo
 
 const other = (c) => (c === "black" ? "white" : "black");
 const log = (t) => { $("log").textContent += t + "\n"; $("log").scrollTop = 1e9; };
@@ -124,7 +129,21 @@ async function engineMove() {
   const color = other(human);
   status("GNU Go is thinking…"); setBusy(true);
   const t = performance.now();
-  const mv = await go.genmove(color);
+  $("stop").hidden = false; $("stop").disabled = false;
+  let mv;
+  try {
+    mv = await go.genmove(color);
+  } catch (e) {
+    if (!e.cancelled) throw e;
+    // "Move now": the long search was aborted; play a quick level-0 move.
+    status("GNU Go is moving quickly…");
+    await go.level(0);
+    mv = await go.genmove(color);
+    await go.level($("level").value);
+  } finally {
+    $("stop").hidden = true;
+  }
+  moves.push(color);
   log(`${color} ${mv}  (${((performance.now() - t) / 1000).toFixed(1)}s)`);
   if (mv.toLowerCase() === "resign") { over = true; status(`GNU Go resigns — you win!`); }
   else if (mv.toUpperCase() === "PASS") { passes++; last = null; status("GNU Go passes. Your move."); }
@@ -137,6 +156,7 @@ async function engineMove() {
 async function humanMove(vertex) {
   try { await go.play(human, vertex); }
   catch (e) { status(`Illegal move: ${vertex}`); setBusy(false); return; }
+  moves.push(human);
   log(`${human} ${vertex}`);
   if (vertex === "pass") passes++; else { passes = 0; last = vertex; }
   await refresh();
@@ -152,10 +172,11 @@ async function score() {
 }
 
 async function newGame() {
-  setBusy(true); over = false; passes = 0; last = null;
+  setBusy(true); over = false; passes = 0; last = null; moves = [];
   size = Number($("size").value); human = $("color").value;
   await go.boardsize(size); await go.clearBoard();
   await go.komi($("komi").value); await go.level($("level").value);
+  await go.timePerMove(Number($("time").value));
   $("log").textContent = ""; log(`new game ${size}x${size}, you are ${human}`);
   await refresh();
   if (human === "white") await engineMove();
@@ -173,10 +194,19 @@ canvas.addEventListener("click", (ev) => {
 $("new").onclick = newGame;
 $("pass").onclick = () => { if (!busy && !over) { setBusy(true); humanMove("pass"); } };
 $("undo").onclick = async () => {
-  setBusy(true); over = false;
-  try { await go.undo(); await go.undo(); } catch {}
+  // Take back your last move and any engine reply after it. If you have
+  // not moved yet (you play white), there is nothing to undo.
+  if (!moves.includes(human)) return;
+  setBusy(true); over = false; passes = 0;
+  try {
+    let undone;
+    do { await go.undo(); undone = moves.pop(); } while (undone !== human);
+  } catch {}
   last = null; await refresh(); status("Your move."); setBusy(false);
 };
+$("stop").onclick = () => { $("stop").disabled = true; go.cancel(); };
+$("level").onchange = () => { if (!busy) go.level($("level").value); };
+$("time").onchange = () => { if (!busy) go.timePerMove(Number($("time").value)); };
 $("score").onclick = score;
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 

@@ -39,6 +39,27 @@ const score = await go.finalScore();     // "B+3.5"
 const text = await go.command("estimate_score"); // any GTP command
 ```
 
-`command()` rejects with `GtpError` for `?` responses. In C, the module
+`command()` rejects with `GtpError` for `?` responses.
+
+### Time limits and stopping a search
+
+```js
+await go.timePerMove(5);   // soft budget: GNU Go lowers its level when moves run long
+                           // (0 = no limit)
+
+const pending = go.genmove("black");
+await go.cancel();         // hard stop: pending rejects with GtpError { cancelled: true }
+                           // and the engine is restarted with the same position
+```
+
+`cancel()` replaces the worker and replays the commands that changed the
+game state (board size, komi, level, time settings, moves, undo,
+handicap), so the game continues where it was. `go.busy` tells whether
+a command is running.
+
+### Without the worker
+
+In C, the module
+
 exports `gnugo_wasm_init(seed, memory_mb)` and `gnugo_wasm_gtp(line)`
 (see `src/interface/wasm_api.c`) for use without the worker.
