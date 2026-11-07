@@ -129,17 +129,33 @@ jobs:
         working-directory: tests
         run: python run_tests.py ../build-wasm/src/interface/gnugo.js --strict tiny.tst
 
+      # The native and WebAssembly builds must choose identical moves; a
+      # difference means undefined or platform-dependent behavior.
+      - name: Native build for comparison
+        run: |
+          cmake -S . -B build-native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --parallel 4 --target gnugo
+
+      - name: Compare native and WebAssembly moves
+        run: >
+          python tests/compare_engines.py build-native/src/interface/gnugo
+          build-wasm/src/interface/gnugo.js --moves 40
+
       - name: Package
         run: |
           mkdir -p dist
           cp -r build-wasm/web dist/gnugo-wasm
-          cp COPYING wasm/README.md dist/gnugo-wasm/
           (cd dist && zip -qr ../gnugo-wasm.zip gnugo-wasm)
+          # npm package tarball (build-wasm/web is the package root).
+          (cd build-wasm/web && npm pack --pack-destination ../..)
+          mv abbychau-gnugo-wasm-*.tgz gnugo-wasm-npm.tgz
 
       - uses: actions/upload-artifact@v4
         with:
           name: gnugo-wasm
-          path: gnugo-wasm.zip
+          path: |
+            gnugo-wasm.zip
+            gnugo-wasm-npm.tgz
           if-no-files-found: error
 
       # Static site for GitHub Pages: the demo page plus the engine.
