@@ -68,6 +68,7 @@ struct gtp_command {
   gtp_fn_ptr function;
 };
 
+int gtp_execute_line(struct gtp_command commands[], char *line);
 void gtp_main_loop(struct gtp_command commands[],
 		   FILE *gtp_input, FILE *gtp_output, FILE *gtp_dump_commands);
 void gtp_internal_set_boardsize(int size);

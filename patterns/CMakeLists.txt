@@ -91,11 +91,28 @@ TARGET_LINK_LIBRARIES(compress_fuseki)
 
 # The LOCATION property was removed in CMake 4.0; use generator
 # expressions to refer to the built tool executables instead.
-SET(JOSEKI_EXE $<TARGET_FILE:joseki>)
-SET(MKPAT_EXE $<TARGET_FILE:mkpat>)
-SET(MKEYES_EXE $<TARGET_FILE:mkeyes>)
-SET(MKMCPAT_EXE $<TARGET_FILE:mkmcpat>)
-SET(UNCOMPRESS_FUSEKI_EXE $<TARGET_FILE:uncompress_fuseki>)
+#
+# When cross compiling to WebAssembly the generator tools are themselves
+# built with Emscripten and run under node (CMAKE_CROSSCOMPILING_EMULATOR,
+# set by the Emscripten toolchain file). NODERAWFS gives them direct
+# access to the host file system.
+IF(EMSCRIPTEN)
+    FOREACH(tool mkpat joseki mkeyes mkmcpat uncompress_fuseki
+                 extract_fuseki compress_fuseki)
+        TARGET_LINK_OPTIONS(${tool} PRIVATE
+                            -sNODERAWFS=1 -sEXIT_RUNTIME=1 -sALLOW_MEMORY_GROWTH=1
+                            -sSTACK_SIZE=4MB)
+    ENDFOREACH()
+    SET(TOOL_RUNNER ${CMAKE_CROSSCOMPILING_EMULATOR})
+ELSE()
+    SET(TOOL_RUNNER "")
+ENDIF()
+
+SET(JOSEKI_EXE ${TOOL_RUNNER} $<TARGET_FILE:joseki>)
+SET(MKPAT_EXE ${TOOL_RUNNER} $<TARGET_FILE:mkpat>)
+SET(MKEYES_EXE ${TOOL_RUNNER} $<TARGET_FILE:mkeyes>)
+SET(MKMCPAT_EXE ${TOOL_RUNNER} $<TARGET_FILE:mkmcpat>)
+SET(UNCOMPRESS_FUSEKI_EXE ${TOOL_RUNNER} $<TARGET_FILE:uncompress_fuseki>)
 
 SET(JOSEKI_INPUTS "")
 SET(JOSEKI_NAMES "")

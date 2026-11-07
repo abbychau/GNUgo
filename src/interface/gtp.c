@@ -76,16 +76,77 @@ static int current_id;
 FILE *gtp_output_file = NULL;
 
 
+/* Interpret a single line as a GTP command. The response is written
+ * to gtp_output_file. Returns GTP_OK, GTP_QUIT or GTP_FATAL.
+ */
+int
+gtp_execute_line(struct gtp_command commands[], char *line)
+{
+  char command[GTP_BUFSIZE];
+  char *p;
+  int i;
+  int n;
+  int status = GTP_OK;
+
+  /* Preprocess the line. */
+  for (i = 0, p = line; line[i]; i++) {
+    char c = line[i];
+    /* Convert HT (9) to SPACE (32). */
+    if (c == 9)
+      *p++ = 32;
+    /* Remove CR (13) and all other control characters except LF (10). */
+    else if ((c > 0 && c <= 9)
+	     || (c >= 11 && c <= 31)
+	     || c == 127)
+      continue;
+    /* Remove comments. */
+    else if (c == '#')
+      break;
+    /* Keep ordinary text. */
+    else
+      *p++ = c;
+  }
+  /* Terminate string. */
+  *p = 0;
+
+  p = line;
+
+  /* Look for an identification number. */
+  if (sscanf(p, "%d%n", &current_id, &n) == 1)
+    p += n;
+  else
+    current_id = -1; /* No identification number. */
+
+  /* Look for command name. */
+  if (sscanf(p, " %s %n", command, &n) < 1)
+    return GTP_OK; /* Whitespace only on this line, ignore. */
+  p += n;
+
+  /* Search the list of commands and call the corresponding function
+   * if it's found.
+   */
+  for (i = 0; commands[i].name != NULL; i++) {
+    if (strcmp(command, commands[i].name) == 0) {
+      status = (*commands[i].function)(p);
+      break;
+    }
+  }
+  if (commands[i].name == NULL)
+    gtp_failure("unknown command");
+
+  if (status == GTP_FATAL)
+    gtp_panic();
+
+  return status;
+}
+
+
 /* Read filehandle gtp_input linewise and interpret as GTP commands. */
 void
 gtp_main_loop(struct gtp_command commands[],
 	      FILE *gtp_input, FILE *gtp_output, FILE *gtp_dump_commands)
 {
   char line[GTP_BUFSIZE];
-  char command[GTP_BUFSIZE];
-  char *p;
-  int i;
-  int n;
   int status = GTP_OK;
 
   gtp_output_file = gtp_output;
@@ -98,56 +159,9 @@ gtp_main_loop(struct gtp_command commands[],
     if (gtp_dump_commands) {
       fputs(line, gtp_dump_commands);
       fflush(gtp_dump_commands);
-    }    
-
-    /* Preprocess the line. */
-    for (i = 0, p = line; line[i]; i++) {
-      char c = line[i];
-      /* Convert HT (9) to SPACE (32). */
-      if (c == 9)
-	*p++ = 32;
-      /* Remove CR (13) and all other control characters except LF (10). */
-      else if ((c > 0 && c <= 9)
-	       || (c >= 11 && c <= 31)
-	       || c == 127)
-	continue;
-      /* Remove comments. */
-      else if (c == '#')
-	break;
-      /* Keep ordinary text. */
-      else
-	*p++ = c;
     }
-    /* Terminate string. */
-    *p = 0;
-	
-    p = line;
 
-    /* Look for an identification number. */
-    if (sscanf(p, "%d%n", &current_id, &n) == 1)
-      p += n;
-    else
-      current_id = -1; /* No identification number. */
-
-    /* Look for command name. */
-    if (sscanf(p, " %s %n", command, &n) < 1)
-      continue; /* Whitespace only on this line, ignore. */
-    p += n;
-
-    /* Search the list of commands and call the corresponding function
-     * if it's found.
-     */
-    for (i = 0; commands[i].name != NULL; i++) {
-      if (strcmp(command, commands[i].name) == 0) {
-	status = (*commands[i].function)(p);
-	break;
-      }
-    }
-    if (commands[i].name == NULL)
-      gtp_failure("unknown command");
-
-    if (status == GTP_FATAL)
-      gtp_panic();
+    status = gtp_execute_line(commands, line);
   }
 }
 

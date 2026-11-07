@@ -5,6 +5,7 @@
 
 # --- Build output (CMake) ---
 /build/
+/build-wasm/
 /out/
 /cmake-build-*/
 CMakeCache.txt

@@ -327,6 +327,36 @@ static struct gtp_command commands[] = {
 };
 
 
+/* Prepare the engine for GTP command execution. Output of subsequent
+ * commands goes to gtp_output_file, which callers may replace.
+ */
+void
+play_gtp_init(FILE *gtp_output, int gtp_initial_orientation)
+{
+  gtp_output_file = gtp_output;
+
+  /* Inform the GTP utility functions about the board size. */
+  gtp_internal_set_boardsize(board_size);
+  gtp_orientation = gtp_initial_orientation;
+  gtp_set_vertex_transform_hooks(rotate_on_input, rotate_on_output);
+
+  /* Initialize time handling. */
+  init_timers();
+
+  /* Prepare pattern matcher and reading code. */
+  reset_engine();
+  clearstats();
+}
+
+
+/* Execute one GTP command line. Returns GTP_OK, GTP_QUIT or GTP_FATAL. */
+int
+play_gtp_execute(char *line)
+{
+  return gtp_execute_line(commands, line);
+}
+
+
 /* Start playing using the Go Text Protocol. */
 void
 play_gtp(FILE *gtp_input, FILE *gtp_output, FILE *gtp_dump_commands,
@@ -339,17 +369,7 @@ play_gtp(FILE *gtp_input, FILE *gtp_output, FILE *gtp_dump_commands,
    */
   setbuf(gtp_output, NULL);
 
-  /* Inform the GTP utility functions about the board size. */
-  gtp_internal_set_boardsize(board_size);
-  gtp_orientation = gtp_initial_orientation;
-  gtp_set_vertex_transform_hooks(rotate_on_input, rotate_on_output);
-
-  /* Initialize time handling. */
-  init_timers();
-  
-  /* Prepare pattern matcher and reading code. */
-  reset_engine();
-  clearstats();
+  play_gtp_init(gtp_output, gtp_initial_orientation);
   gtp_main_loop(commands, gtp_input, gtp_output, gtp_dump_commands);
   if (showstatistics)
     showstats();

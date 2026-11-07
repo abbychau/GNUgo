@@ -34,6 +34,8 @@
 
 void play_ascii(SGFTree *tree, Gameinfo *gameinfo, 
 		char *filename, char *until);
+void play_gtp_init(FILE *gtp_output, int gtp_initial_orientation);
+int play_gtp_execute(char *line);
 void play_gtp(FILE *gtp_input, FILE *gtp_output, FILE *gtp_dump_commands,
 	      int gtp_initial_orientation);
 void play_gmp(Gameinfo *gameinfo, int simplified);

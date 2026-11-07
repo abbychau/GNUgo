@@ -366,7 +366,15 @@ gg_sort(void *base, size_t nel, size_t width,
 {
   int gap = nel;
   int swap_made;
-  char *end = (char *) base + width * (nel - 1);
+  char *end;
+
+  /* Nothing to sort. Also avoids computing base + width * (size_t) -1
+   * below, which is undefined behavior that clang exploits.
+   */
+  if (nel < 2)
+    return;
+
+  end = (char *) base + width * (nel - 1);
   do {
     char *a, *b;
     swap_made = 0;
