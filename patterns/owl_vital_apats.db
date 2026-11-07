@@ -586,7 +586,7 @@ OXb|
 X.X|
 XXa|
 
-;lib(a)>1 || !oplay_attack(*,?,b,*)==WIN
+;lib(a)>1 || oplay_attack(*,?,b,*)!=WIN
 
 
 Pattern VA33

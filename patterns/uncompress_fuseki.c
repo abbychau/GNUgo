@@ -224,9 +224,9 @@ main(int argc, char *argv[])
 
   assert(boardsize > 0);
   if (boardsize > MAX_BOARD) {
-    printf(output_strings[PREAMBLE]);
+    fputs(output_strings[PREAMBLE], stdout);
     printf(output_strings[HEADER], boardsize);
-    printf(output_strings[FOOTER]);
+    fputs(output_strings[FOOTER], stdout);
     return EXIT_SUCCESS;
   }
   
@@ -251,7 +251,7 @@ main(int argc, char *argv[])
     board[k][boardsize + 1] = '|';
   }
 
-  printf(output_strings[PREAMBLE]);
+  fputs(output_strings[PREAMBLE], stdout);
   printf(output_strings[HEADER], boardsize);
   
 
@@ -308,7 +308,7 @@ main(int argc, char *argv[])
   if (mode == C_OUTPUT)
     write_pattern_c_code(NULL, board1d, NO_MOVE, 0, boardsize, -1);
   
-  printf(output_strings[FOOTER]);
+  fputs(output_strings[FOOTER], stdout);
 
   return EXIT_SUCCESS;
 }

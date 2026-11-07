@@ -1419,7 +1419,7 @@ generate_autohelper_code(int funcno, int number_of_params, int *labels)
     /* A common case. Just use the labels as parameters. */
     switch (number_of_params) {
     case 0:
-      code_pos += sprintf(code_pos, autohelper_functions[funcno].code);
+      code_pos += sprintf(code_pos, "%s", autohelper_functions[funcno].code);
       break;
     case 1:
       code_pos += sprintf(code_pos, autohelper_functions[funcno].code,

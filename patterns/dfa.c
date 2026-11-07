@@ -288,19 +288,19 @@ dump_dfa(FILE *f, dfa_t *pdfa)
   int i;
   int att, k;
 
-  fprintf(f, line);
+  fputs(line, f);
   fprintf(f, " name : %s\n", pdfa->name);
   fprintf(f, " Nb states :  %7d, max= %d\n", pdfa->last_state + 1,
 	  pdfa->max_states);
   fprintf(f, " Nb Indexes : %7d, max= %d\n", pdfa->last_index,
 	  pdfa->max_indexes);
   fprintf(f, " memory needed : %d Mb\n", dfa_size(pdfa) / 1024);
-  fprintf(f, line);
+  fputs(line, f);
 
   if (dfa_size(pdfa) > 10000) /* change this value if needed */
     return;
   fprintf(f, " state  |   .    |   O    |   X    |   #    |  att \n");
-  fprintf(f, line);
+  fputs(line, f);
   for (i = 1; i != pdfa->last_state + 1; i++) {
     int *pnext = pdfa->states[i].next;
     fprintf(f, " %6d |", i);
@@ -318,7 +318,7 @@ dump_dfa(FILE *f, dfa_t *pdfa)
       fprintf(f, " ...");
     fprintf(f, "\n");
   }
-  fprintf(f, line);
+  fputs(line, f);
   fflush(f);
 }
 

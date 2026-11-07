@@ -31,9 +31,15 @@
 #endif
 
 
-#define USE_WINDOWS_SOCKET_CLUDGE		\
-  ((defined(_WIN32) || defined(_WIN32_WCE))	\
-   && defined(ENABLE_SOCKET_SUPPORT))
+/* Evaluate the condition here rather than putting `defined' inside the
+ * macro body: a macro expanding to `defined' is undefined behavior in
+ * #if (and clang warns about it in every file that includes this).
+ */
+#if (defined(_WIN32) || defined(_WIN32_WCE)) && defined(ENABLE_SOCKET_SUPPORT)
+#define USE_WINDOWS_SOCKET_CLUDGE 1
+#else
+#define USE_WINDOWS_SOCKET_CLUDGE 0
+#endif
 
 
 #if USE_WINDOWS_SOCKET_CLUDGE
