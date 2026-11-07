@@ -1,0 +1,36 @@
+{
+  "name": "@abbychau/gnugo-wasm",
+  "version": "3.8.0",
+  "description": "GNU Go 3.8 compiled to WebAssembly: play and analyze Go in the browser via a Web Worker and a Promise-based GTP API.",
+  "keywords": ["go", "baduk", "weiqi", "gnugo", "gtp", "webassembly", "wasm", "sgf"],
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abbychau/GNUgo.git",
+    "directory": "wasm"
+  },
+  "homepage": "https://abbychau.github.io/GNUgo/",
+  "type": "module",
+  "main": "./gnugo.js",
+  "types": "./gnugo.d.ts",
+  "exports": {
+    ".": {
+      "types": "./gnugo.d.ts",
+      "default": "./gnugo.js"
+    },
+    "./gnugo-worker.js": "./gnugo-worker.js",
+    "./gnugo-core.js": "./gnugo-core.js",
+    "./gnugo-core.wasm": "./gnugo-core.wasm",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "gnugo.js",
+    "gnugo.d.ts",
+    "gnugo-worker.js",
+    "gnugo-core.js",
+    "gnugo-core.wasm",
+    "README.md",
+    "COPYING"
+  ],
+  "sideEffects": false
+}

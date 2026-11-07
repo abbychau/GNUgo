@@ -32,7 +32,10 @@
   button.primary { background: var(--accent); color: #fff; border-color: transparent; }
   button:disabled { opacity: .5; cursor: default; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .split { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   #status { font-weight: 600; min-height: 1.4em; }
+  #info { font-size: 13px; color: var(--muted); min-height: 1.2em; margin-top: -8px; }
+  input[type=file] { display: none; }
   #log { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--muted); max-height: 180px;
          overflow: auto; white-space: pre-wrap; margin: 0; border-top: 1px solid var(--border); padding-top: 8px; }
 </style>
@@ -41,11 +44,12 @@
 <main>
   <section>
     <h1>GNU Go 3.8 — WebAssembly</h1>
-    <p class="sub">The engine runs entirely in your browser in a Web Worker.</p>
+    <p class="sub">The engine runs entirely in your browser in a Web Worker. Your game is kept in this browser.</p>
     <canvas id="board" width="760" height="760" aria-label="Go board"></canvas>
   </section>
   <aside>
     <div id="status">Loading engine…</div>
+    <div id="info"></div>
     <div class="row">
       <label>Board <select id="size"><option>9</option><option>13</option><option selected>19</option></select></label>
       <label>You play <select id="color"><option value="black">Black</option><option value="white">White</option></select></label>
@@ -54,16 +58,28 @@
       <label>Level <select id="level"></select></label>
       <label>Komi <select id="komi"><option>0.5</option><option>5.5</option><option selected>6.5</option><option>7.5</option></select></label>
     </div>
-    <label>Time per move
-      <select id="time"><option value="0">No limit</option><option value="2">~2 s</option><option value="5" selected>~5 s</option><option value="10">~10 s</option></select>
-    </label>
+    <div class="row">
+      <label>Handicap <select id="handicap"><option value="0">None</option></select></label>
+      <label>Time per move
+        <select id="time"><option value="0">No limit</option><option value="2">~2 s</option><option value="5" selected>~5 s</option><option value="10">~10 s</option></select>
+      </label>
+    </div>
     <button id="new" class="primary" disabled>New game</button>
     <button id="stop" hidden>Move now</button>
-    <div class="row">
+    <div class="split">
       <button id="pass" disabled>Pass</button>
       <button id="undo" disabled>Undo</button>
+      <button id="hint" disabled>Hint</button>
     </div>
-    <button id="score" disabled>Score</button>
+    <div class="row">
+      <button id="estimate" disabled>Estimate</button>
+      <button id="score" disabled>Score</button>
+    </div>
+    <div class="row">
+      <button id="save" disabled>Save SGF</button>
+      <button id="load" disabled>Load SGF</button>
+    </div>
+    <input type="file" id="file" accept=".sgf,application/x-go-sgf">
     <pre id="log"></pre>
   </aside>
 </main>
@@ -73,23 +89,32 @@ import { GnuGo, toVertex, fromVertex } from "./gnugo.js";
 const $ = (id) => document.getElementById(id);
 const canvas = $("board"), ctx = canvas.getContext("2d");
 for (let i = 0; i <= 10; i++) $("level").add(new Option(i, i, false, i === 6));
+for (let i = 2; i <= 9; i++) $("handicap").add(new Option(i, i));
 
+const STORE = "gnugo-wasm-game";
 let go, size = 19, human = "black", busy = true, over = false;
 let stones = { black: [], white: [] }, last = null, passes = 0;
-let moves = [];          // colors of the moves played so far, for undo
+let marks = { hints: [], dead: [], blackTerritory: [], whiteTerritory: [] };
 
 const other = (c) => (c === "black" ? "white" : "black");
 const log = (t) => { $("log").textContent += t + "\n"; $("log").scrollTop = 1e9; };
 const status = (t) => ($("status").textContent = t);
+const info = (t) => ($("info").textContent = t || "");
+const clearMarks = () => (marks = { hints: [], dead: [], blackTerritory: [], whiteTerritory: [] });
+const vertices = (s) => s.split(/\s+/).filter(Boolean);
+
 function setBusy(b) {
   busy = b;
-  for (const id of ["new", "pass", "undo", "score"]) $(id).disabled = b;
-  if (over) $("pass").disabled = true;
+  for (const id of ["new", "pass", "undo", "hint", "estimate", "score", "save", "load"]) $(id).disabled = b;
+  if (over) for (const id of ["pass", "hint"]) $(id).disabled = true;
 }
+
+/* ---- Drawing ---- */
 
 function draw() {
   const W = canvas.width, cs = getComputedStyle(document.documentElement);
   const step = W / (size + 1), r = step * 0.47;
+  const at = (v) => { const p = fromVertex(v, size); return p && { x: step * (p.x + 1), y: step * (p.y + 1) }; };
   ctx.fillStyle = cs.getPropertyValue("--wood"); ctx.fillRect(0, 0, W, W);
   ctx.strokeStyle = cs.getPropertyValue("--line"); ctx.lineWidth = Math.max(1, W / 760);
   ctx.fillStyle = cs.getPropertyValue("--line");
@@ -105,29 +130,96 @@ function draw() {
     if (size === 9 && (x === 4) !== (y === 4)) continue;
     ctx.beginPath(); ctx.arc(step * (x + 1), step * (y + 1), step * 0.1, 0, 7); ctx.fill();
   }
+  const dead = new Set(marks.dead);
   for (const color of ["black", "white"]) for (const v of stones[color]) {
-    const p = fromVertex(v, size); if (!p) continue;
-    const cx = step * (p.x + 1), cy = step * (p.y + 1);
-    const g = ctx.createRadialGradient(cx - r * .35, cy - r * .35, r * .1, cx, cy, r);
+    const c = at(v); if (!c) continue;
+    const g = ctx.createRadialGradient(c.x - r * .35, c.y - r * .35, r * .1, c.x, c.y, r);
     if (color === "black") { g.addColorStop(0, "#555"); g.addColorStop(1, "#111"); }
     else { g.addColorStop(0, "#fff"); g.addColorStop(1, "#cfcfcf"); }
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
-    if (v === last) {
+    ctx.globalAlpha = dead.has(v) ? 0.4 : 1;
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1;
+    if (v === last && !dead.has(v)) {
       ctx.strokeStyle = color === "black" ? "#fff" : "#000"; ctx.lineWidth = Math.max(2, step * 0.06);
-      ctx.beginPath(); ctx.arc(cx, cy, r * 0.45, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.45, 0, 7); ctx.stroke();
     }
   }
+  // Territory after scoring: small squares in the owner's color.
+  for (const [list, fill] of [[marks.blackTerritory, "#111"], [marks.whiteTerritory, "#fff"]]) {
+    ctx.fillStyle = fill;
+    for (const v of list) { const c = at(v); if (c) ctx.fillRect(c.x - step * .15, c.y - step * .15, step * .3, step * .3); }
+  }
+  // Hints: numbered discs, best first.
+  marks.hints.forEach((v, i) => {
+    const c = at(v); if (!c) return;
+    ctx.fillStyle = i === 0 ? "rgba(47,111,78,.9)" : "rgba(47,111,78,.6)";
+    ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.8, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = `bold ${Math.round(step * 0.4)}px system-ui`;
+    ctx.fillText(String(i + 1), c.x, c.y + 1);
+  });
 }
 
 async function refresh() {
   stones.black = await go.listStones("black");
   stones.white = await go.listStones("white");
   draw();
+  save();
+}
+
+/* ---- Autosave in this browser ---- */
+
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify({
+      record: go.gameRecord(), human, over, last,
+      level: $("level").value, time: $("time").value,
+    }));
+  } catch {}
+}
+
+async function restore() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(STORE)); } catch {}
+  const rec = saved && saved.record;
+  if (!rec || saved.over || !(rec.moves.length || rec.setup.W.length)) return false;
+  size = rec.size; human = saved.human; last = saved.last;
+  $("size").value = String(size); $("color").value = human;
+  $("level").value = saved.level; $("time").value = saved.time;
+  await go.boardsize(size); await go.clearBoard();
+  if (rec.komi !== null) { await go.komi(rec.komi); $("komi").value = String(rec.komi); }
+  if (rec.setup.W.length) {
+    // A loaded SGF position: rebuild it from its setup stones.
+    const color = rec.toMove === "W" ? "W" : "B";
+    await go.loadSgf(`(;GM[1]FF[4]SZ[${size}]` + (rec.komi !== null ? `KM[${rec.komi}]` : "") +
+      ["B", "W"].map((c) => rec.setup[c].length ? `A${c}` + rec.setup[c].map(sgf).join("") : "").join("") +
+      `PL[${color}])`);
+  } else if (rec.setup.B.length) {
+    await go.command(`set_free_handicap ${rec.setup.B.join(" ")}`);
+  }
+  for (const m of rec.moves) await go.play(m.color === "B" ? "black" : "white", m.vertex);
+  await go.level(saved.level); await go.timePerMove(Number(saved.time));
+  log(`restored game: ${size}x${size}, ${rec.moves.length} moves, you are ${human}`);
+  return true;
+}
+
+function sgf(v) {
+  const p = fromVertex(v, size);
+  return `[${String.fromCharCode(97 + p.x)}${String.fromCharCode(97 + p.y)}]`;
+}
+
+/* ---- Game flow ---- */
+
+function toMove() {
+  const rec = go.gameRecord();
+  const lastMove = rec.moves[rec.moves.length - 1];
+  if (lastMove) return lastMove.color === "B" ? "white" : "black";
+  if (rec.toMove) return rec.toMove === "W" ? "white" : "black";
+  return rec.handicap > 0 ? "white" : "black";
 }
 
 async function engineMove() {
   const color = other(human);
-  status("GNU Go is thinking…"); setBusy(true);
+  status("GNU Go is thinking…"); setBusy(true); clearMarks(); info();
   const t = performance.now();
   $("stop").hidden = false; $("stop").disabled = false;
   let mv;
@@ -143,9 +235,8 @@ async function engineMove() {
   } finally {
     $("stop").hidden = true;
   }
-  moves.push(color);
   log(`${color} ${mv}  (${((performance.now() - t) / 1000).toFixed(1)}s)`);
-  if (mv.toLowerCase() === "resign") { over = true; status(`GNU Go resigns — you win!`); }
+  if (mv.toLowerCase() === "resign") { over = true; status("GNU Go resigns — you win!"); }
   else if (mv.toUpperCase() === "PASS") { passes++; last = null; status("GNU Go passes. Your move."); }
   else { passes = 0; last = mv.toUpperCase(); status("Your move."); }
   await refresh();
@@ -156,7 +247,7 @@ async function engineMove() {
 async function humanMove(vertex) {
   try { await go.play(human, vertex); }
   catch (e) { status(`Illegal move: ${vertex}`); setBusy(false); return; }
-  moves.push(human);
+  clearMarks(); info();
   log(`${human} ${vertex}`);
   if (vertex === "pass") passes++; else { passes = 0; last = vertex; }
   await refresh();
@@ -165,23 +256,33 @@ async function humanMove(vertex) {
 }
 
 async function score() {
-  setBusy(true); status("Scoring…");
+  setBusy(true); status("Scoring…"); clearMarks();
   const s = await go.finalScore();
+  marks.dead = await go.deadStones();
+  marks.blackTerritory = vertices(await go.command("final_status_list black_territory"));
+  marks.whiteTerritory = vertices(await go.command("final_status_list white_territory"));
   over = true; status(`Result: ${s}`); log(`final_score ${s}`);
+  info(marks.dead.length ? `Faded stones are dead (${marks.dead.length}); squares show territory.` : "Squares show territory.");
+  await refresh();
   setBusy(false);
 }
 
 async function newGame() {
-  setBusy(true); over = false; passes = 0; last = null; moves = [];
+  setBusy(true); over = false; passes = 0; last = null; clearMarks(); info();
   size = Number($("size").value); human = $("color").value;
+  const handicap = Math.min(Number($("handicap").value), size === 9 ? 5 : 9);
   await go.boardsize(size); await go.clearBoard();
   await go.komi($("komi").value); await go.level($("level").value);
   await go.timePerMove(Number($("time").value));
-  $("log").textContent = ""; log(`new game ${size}x${size}, you are ${human}`);
+  if (handicap >= 2) await go.fixedHandicap(handicap);
+  $("log").textContent = "";
+  log(`new game ${size}x${size}${handicap >= 2 ? `, handicap ${handicap}` : ""}, you are ${human}`);
   await refresh();
-  if (human === "white") await engineMove();
+  if (toMove() !== human) await engineMove();
   else { status("Your move."); setBusy(false); }
 }
+
+/* ---- Controls ---- */
 
 canvas.addEventListener("click", (ev) => {
   if (busy || over) return;
@@ -194,19 +295,59 @@ canvas.addEventListener("click", (ev) => {
 $("new").onclick = newGame;
 $("pass").onclick = () => { if (!busy && !over) { setBusy(true); humanMove("pass"); } };
 $("undo").onclick = async () => {
-  // Take back your last move and any engine reply after it. If you have
-  // not moved yet (you play white), there is nothing to undo.
-  if (!moves.includes(human)) return;
-  setBusy(true); over = false; passes = 0;
+  // Take back your last move and any engine reply after it. Moves before
+  // your first move (an engine opening, handicap) are never undone.
+  const moves = go.gameRecord().moves;
+  const mine = human === "black" ? "B" : "W";
+  if (!moves.some((m) => m.color === mine)) return;
+  setBusy(true); over = false; passes = 0; clearMarks(); info();
   try {
     let undone;
-    do { await go.undo(); undone = moves.pop(); } while (undone !== human);
+    do { await go.undo(); undone = moves.pop(); } while (undone.color !== mine);
   } catch {}
   last = null; await refresh(); status("Your move."); setBusy(false);
 };
+$("hint").onclick = async () => {
+  setBusy(true); status("Looking for good moves…");
+  const top = (await go.topMoves(human)).slice(0, 3);
+  marks.hints = top.map((m) => m.vertex);
+  info(top.length ? "Hints: " + top.map((m, i) => `${i + 1}. ${m.vertex} (${m.value.toFixed(1)})`).join("  ") : "No suggestion.");
+  draw(); status("Your move."); setBusy(false);
+};
+$("estimate").onclick = async () => {
+  setBusy(true);
+  const before = $("status").textContent;
+  status("Estimating…");
+  const s = await go.estimateScore();
+  info(`Estimate: ${s.split(" ")[0]}`);
+  status(before); setBusy(false);
+};
+$("save").onclick = async () => {
+  const text = await go.toSgf();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "application/x-go-sgf" }));
+  a.download = `gnugo-${new Date().toISOString().slice(0, 10)}.sgf`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("load").onclick = () => $("file").click();
+$("file").onchange = async () => {
+  const f = $("file").files[0]; $("file").value = "";
+  if (!f) return;
+  setBusy(true); clearMarks(); info(); over = false; passes = 0; last = null;
+  try {
+    const next = await go.loadSgf(await f.text());
+    size = go.gameRecord().size; $("size").value = String(size);
+    human = next; $("color").value = human;
+    log(`loaded ${f.name}: ${size}x${size}, ${next} to move; you play ${human}`);
+    status("Your move.");
+  } catch (e) {
+    status(`Could not load ${f.name}: ${e.gtpMessage || e.message}`);
+  }
+  await refresh(); setBusy(false);
+};
 $("stop").onclick = () => { $("stop").disabled = true; go.cancel(); };
-$("level").onchange = () => { if (!busy) go.level($("level").value); };
-$("time").onchange = () => { if (!busy) go.timePerMove(Number($("time").value)); };
+$("level").onchange = () => { if (!busy) { go.level($("level").value); save(); } };
+$("time").onchange = () => { if (!busy) { go.timePerMove(Number($("time").value)); save(); } };
 $("score").onclick = score;
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 
@@ -214,7 +355,13 @@ draw();
 try {
   go = await GnuGo.create();
   log(`GNU Go ${await go.version()} ready`);
-  await newGame();
+  if (await restore()) {
+    await refresh();
+    if (toMove() !== human) await engineMove();
+    else { status("Your move."); setBusy(false); }
+  } else {
+    await newGame();
+  }
 } catch (e) {
   status("Failed to load engine: " + e.message);
 }

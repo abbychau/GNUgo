@@ -17,13 +17,34 @@ Output in `build-wasm/web/`:
 
 | File | Purpose |
 |---|---|
-| `gnugo-core.js`, `gnugo-core.wasm` | Emscripten module (`createGnuGoModule()`) |
-| `gnugo-worker.js` | Web Worker hosting the engine |
+| `gnugo-core.js`, `gnugo-core.wasm` | Emscripten ES module; default export `createGnuGoModule()` |
+| `gnugo-worker.js` | Module Web Worker hosting the engine |
 | `gnugo.js` | ES module API (`GnuGo` class) |
 | `index.html` | Demo: play against GNU Go |
+| `gnugo.d.ts`, `package.json` | TypeScript types and npm package metadata |
 
 Serve the folder over HTTP (e.g. `python -m http.server -d build-wasm/web`);
 `file://` will not work because workers and wasm need a real origin.
+
+## Use as a package
+
+`build-wasm/web` is also an npm package (`@abbychau/gnugo-wasm`, with
+TypeScript types in `gnugo.d.ts`). Tagged GitHub releases attach it as
+`gnugo-wasm-npm.tgz`:
+
+```sh
+npm install ./gnugo-wasm-npm.tgz
+```
+
+The engine runs in a worker that loads `gnugo-core.js` and
+`gnugo-core.wasm` next to it, so serve these three files together. With
+a bundler, copy `gnugo-worker.js`, `gnugo-core.js` and `gnugo-core.wasm`
+from the package to your static/public folder and pass their location:
+
+```js
+import { GnuGo } from "@abbychau/gnugo-wasm";
+const go = await GnuGo.create({ workerUrl: "/gnugo/gnugo-worker.js" });
+```
 
 ## API
 
@@ -56,6 +77,20 @@ await go.cancel();         // hard stop: pending rejects with GtpError { cancell
 game state (board size, komi, level, time settings, moves, undo,
 handicap), so the game continues where it was. `go.busy` tells whether
 a command is running.
+
+### SGF
+
+```js
+const toMove = await go.loadSgf(sgfText);      // whole game; "black" | "white"
+await go.loadSgf(sgfText, 42);                 // stop before move 42
+const text = await go.toSgf();                 // setup + moves in order
+const record = go.gameRecord();                // { size, komi, setup, moves, ... }
+```
+
+`toSgf()` is built from the commands sent through this object: moves,
+passes, handicap and undo are all reflected. After `loadSgf()`, the
+loaded position becomes setup stones. `positionSgf()` returns GNU Go's
+own `printsgf` snapshot of the current position.
 
 ### Without the worker
 

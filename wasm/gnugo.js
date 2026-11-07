@@ -31,11 +31,11 @@ export class GtpError extends Error {
 const STATE_COMMANDS = new Set([
   "boardsize", "clear_board", "komi", "level", "play", "undo", "gg-undo",
   "fixed_handicap", "place_free_handicap", "set_free_handicap",
-  "time_settings", "orientation", "random_seed",
+  "time_settings", "orientation", "random_seed", "loadsgf",
 ]);
 
 function spawn(url) {
-  const worker = new Worker(url);
+  const worker = new Worker(url, { type: "module" });
   return new Promise((resolve, reject) => {
     const onMessage = (ev) => {
       if (ev.data && ev.data.type === "ready") {
@@ -81,6 +81,8 @@ export class GnuGo {
     this._nextId = 1;
     this._waiting = new Map();
     this._history = [];        // state-changing commands, for replay after cancel()
+    // Game record for toSgf(): setup stones plus the moves in order.
+    this._game = { size: 19, komi: null, handicap: 0, setup: { B: [], W: [] }, moves: [] };
     this._ready = Promise.resolve();
     this._attach(worker);
   }
@@ -88,34 +90,57 @@ export class GnuGo {
   _attach(worker) {
     this._worker = worker;
     worker.addEventListener("message", (ev) => {
-      const { id, response } = ev.data || {};
-      const entry = this._waiting.get(id);
+      const msg = ev.data || {};
+      const entry = this._waiting.get(msg.id);
       if (!entry) return;
-      this._waiting.delete(id);
-      entry.resolve(response);
+      this._waiting.delete(msg.id);
+      if (msg.error !== undefined) entry.reject(new Error(msg.error));
+      else entry.resolve(msg);
     });
   }
 
-  _send(cmd) {
+  /* Send a message ({ cmd } or a file operation) and resolve with the reply. */
+  _post(msg) {
     const id = this._nextId++;
     return new Promise((resolve, reject) => {
-      this._waiting.set(id, { resolve, reject, cmd });
-      this._worker.postMessage({ id, cmd });
+      this._waiting.set(id, { resolve, reject, cmd: msg.cmd ?? msg.writeFile ?? msg.readFile });
+      this._worker.postMessage({ id, ...msg });
     });
+  }
+
+  /* Replay one history entry: a GTP command string or a file write. */
+  _replay(entry) {
+    return typeof entry === "string" ? this._post({ cmd: entry }) : this._post(entry);
   }
 
   /** Send a raw GTP line; resolves with the full raw response text. */
   async raw(cmd) {
     await this._ready;
     if (!this._worker) throw new Error("GnuGo engine terminated");
-    const text = await this._send(cmd);
-    if (text.startsWith("=")) this._record(cmd, text);
-    return text;
+    const { response } = await this._post({ cmd });
+    if (response.startsWith("=")) this._record(cmd, response);
+    return response;
+  }
+
+  /** Write a text file into the engine's in-memory file system. */
+  async writeFile(path, data) {
+    await this._ready;
+    if (!this._worker) throw new Error("GnuGo engine terminated");
+    await this._post({ writeFile: path, data: String(data) });
+    this._history.push({ writeFile: path, data: String(data) });
+  }
+
+  /** Read a text file from the engine's in-memory file system. */
+  async readFile(path) {
+    await this._ready;
+    if (!this._worker) throw new Error("GnuGo engine terminated");
+    return (await this._post({ readFile: path })).data;
   }
 
   _record(cmd, text) {
     const parts = cmd.trim().replace(/^\d+\s+/, "").split(/\s+/);
     const name = parts[0];
+    this._track(name, parts, text.replace(/^=\d*[ \t]*/, "").trim());
     if (name === "genmove") {
       // Replay the engine's chosen move as a plain play command.
       const move = text.replace(/^=\d*\s?/, "").trim();
@@ -125,10 +150,46 @@ export class GnuGo {
       const stones = text.replace(/^=\d*\s?/, "").trim();
       if (stones) this._history.push(`set_free_handicap ${stones}`);
     } else if (name === "clear_board") {
-      this._history = this._history.filter((c) => !/^(play|undo|gg-undo|set_free_handicap)\b/.test(c));
+      this._history = this._history.filter(
+        (c) => typeof c !== "string" || !/^(play|undo|gg-undo|set_free_handicap|loadsgf)\b/.test(c));
       this._history.push(cmd);
     } else if (STATE_COMMANDS.has(name)) {
       this._history.push(cmd);
+    }
+  }
+
+  /* Keep the game record used by toSgf() in step with a successful command. */
+  _track(name, parts, body) {
+    const g = this._game;
+    const color = (c) => (c && c[0].toLowerCase() === "w" ? "W" : "B");
+    switch (name) {
+      case "boardsize":
+        g.size = Number(parts[1]);
+        // fall through: a new board size also clears the board
+      case "clear_board":
+        g.handicap = 0; g.setup = { B: [], W: [] }; g.moves = [];
+        break;
+      case "komi":
+        g.komi = Number(parts[1]);
+        break;
+      case "play":
+        g.moves.push({ color: color(parts[1]), vertex: parts[2].toUpperCase() });
+        break;
+      case "genmove":
+        if (body.toLowerCase() !== "resign") g.moves.push({ color: color(parts[1]), vertex: body.toUpperCase() });
+        break;
+      case "undo":
+      case "gg-undo":
+        for (let n = name === "undo" ? 1 : Number(parts[1] || 1); n > 0; n--) g.moves.pop();
+        break;
+      case "fixed_handicap":
+      case "place_free_handicap":
+      case "set_free_handicap": {
+        const stones = name === "set_free_handicap" ? parts.slice(1) : body.split(/\s+/).filter(Boolean);
+        g.setup.B = stones.map((s) => s.toUpperCase());
+        g.handicap = stones.length;
+        break;
+      }
     }
   }
 
@@ -166,7 +227,7 @@ export class GnuGo {
     this._ready = (async () => {
       const worker = await spawn(this._url);
       this._attach(worker);
-      for (const cmd of history) await this._send(cmd);
+      for (const entry of history) await this._replay(entry);
     })();
     return this._ready;
   }
@@ -200,6 +261,60 @@ export class GnuGo {
   /** Quick score estimate, e.g. "W+4.5 (upper bound: -2.5, lower: -6.5)". */
   estimateScore() { return this.command("estimate_score"); }
   showboard() { return this.command("showboard"); }
+
+  /**
+   * Load a game from SGF text. Plays the main line to the end, or stops
+   * before `until`: a move number (42 plays moves 1..41) or the vertex of
+   * the first move not to play (e.g. "D4"). Board
+   * size, komi and handicap come from the SGF. Resolves with the color to
+   * move: "black" or "white".
+   */
+  async loadSgf(text, until) {
+    await this.writeFile("/game.sgf", text);
+    const arg = until === undefined || until === null ? "" : ` ${until}`;
+    const toMove = await this.command(`loadsgf /game.sgf${arg}`);
+    // The loaded position becomes the setup of the game record; moves
+    // played from here on are recorded as moves.
+    const snap = parseSgfRoot(await this.positionSgf(), this._game.size);
+    this._game = { ...snap, moves: [], toMove: toMove[0] === "w" ? "W" : "B" };
+    return toMove;
+  }
+
+  /**
+   * A copy of the game record: { size, komi, handicap, setup: { B, W },
+   * moves: [{ color: "B"|"W", vertex }], toMove? }. Vertices are GTP
+   * coordinates ("D4", "PASS"). Useful for saving and restoring games.
+   */
+  gameRecord() {
+    return JSON.parse(JSON.stringify(this._game));
+  }
+
+  /**
+   * The game as SGF text: board size, komi, handicap/setup stones and
+   * every move in order (undone moves are dropped). After loadSgf(), the
+   * loaded position is written as setup stones.
+   */
+  toSgf() {
+    const g = this._game;
+    const pt = (v) => sgfPoint(v, g.size);
+    let s = `(;GM[1]FF[4]CA[UTF-8]AP[GNU Go:3.8]SZ[${g.size}]`;
+    if (g.komi !== null) s += `KM[${g.komi}]`;
+    if (g.handicap) s += `HA[${g.handicap}]`;
+    if (g.setup.B.length) s += "AB" + g.setup.B.map((v) => `[${pt(v)}]`).join("");
+    if (g.setup.W.length) s += "AW" + g.setup.W.map((v) => `[${pt(v)}]`).join("");
+    if (g.toMove && (g.setup.B.length || g.setup.W.length)) s += `PL[${g.toMove}]`;
+    s += "\n";
+    g.moves.forEach((m, i) => {
+      s += `;${m.color}[${pt(m.vertex)}]` + ((i + 1) % 10 === 0 ? "\n" : "");
+    });
+    return Promise.resolve(s.replace(/\n?$/, ")\n"));
+  }
+
+  /** The current position only (setup stones, no move order), as written by GNU Go's printsgf. */
+  async positionSgf() {
+    await this.command("printsgf /position.sgf");
+    return this.readFile("/position.sgf");
+  }
   listStones(color) { return this.command(`list_stones ${color}`).then(splitVertices); }
   captures(color) { return this.command(`captures ${color}`).then(Number); }
   /** Stones GNU Go considers dead at the end of the game. */
@@ -227,6 +342,40 @@ export class GnuGo {
 
 function splitVertices(s) {
   return s.split(/\s+/).filter(Boolean);
+}
+
+/* SGF point ("dd") for a GTP vertex ("D16"); "" for a pass. */
+function sgfPoint(vertex, size) {
+  const p = fromVertex(vertex, size);
+  if (!p) return "";
+  return String.fromCharCode(97 + p.x) + String.fromCharCode(97 + p.y);
+}
+
+/* GTP vertex for an SGF point. */
+function fromSgfPoint(pt, size) {
+  if (!pt || pt.length < 2) return null;
+  return toVertex(pt.charCodeAt(0) - 97, pt.charCodeAt(1) - 97, size);
+}
+
+/* Read size, komi, handicap and setup stones from a root node such as
+ * the one GNU Go's printsgf writes. */
+function parseSgfRoot(text, fallbackSize) {
+  const one = (id) => (new RegExp(`\\b${id}\\[([^\\]]*)\\]`).exec(text) || [])[1];
+  const many = (id) => {
+    const m = new RegExp(`\\b${id}((?:\\s*\\[[^\\]]*\\])+)`).exec(text);
+    return m ? [...m[1].matchAll(/\[([^\]]*)\]/g)].map((x) => x[1]) : [];
+  };
+  const size = Number(one("SZ")) || fallbackSize;
+  const komi = one("KM");
+  return {
+    size,
+    komi: komi === undefined ? null : Number(komi),
+    handicap: Number(one("HA")) || 0,
+    setup: {
+      B: many("AB").map((p) => fromSgfPoint(p, size)).filter(Boolean),
+      W: many("AW").map((p) => fromSgfPoint(p, size)).filter(Boolean),
+    },
+  };
 }
 
 /* Coordinate helpers: GTP letters skip "I". (x, y) are 0-based from the top-left. */
