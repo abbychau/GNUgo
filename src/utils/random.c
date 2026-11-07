@@ -86,7 +86,7 @@ iterate_tgfsr(void)
 static unsigned int
 next_rand(void)
 {
-  int y;
+  unsigned int y;
   if (!rand_initialized) {
     assert(rand_initialized); /* Abort. */
     gg_srand(1);              /* Initialize silently if assertions disabled. */

@@ -991,11 +991,14 @@ propvalue(char *buffer, int size)
    * characters between 128 and 255 would be negative and a direct
    * cast to int would cause a negative value to be passed to isspace,
    * possibly causing an assertion failure.
+   *
+   * Never step p before buffer: for an empty value that would form
+   * the out-of-bounds pointer buffer - 1 (undefined behavior). As
+   * before, the first character of the value is never removed.
    */
-  --p;
-  while (p > buffer && isspace((int) (unsigned char) *p))
+  while (p > buffer + 1 && isspace((int) (unsigned char) p[-1]))
     --p;
-  *++p = '\0';
+  *p = '\0';
 }
 
 
