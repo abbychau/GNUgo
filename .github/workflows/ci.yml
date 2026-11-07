@@ -1,0 +1,188 @@
+# Build GNU Go natively (Linux, Windows, macOS) and as WebAssembly, run the
+# regression suites, publish the web demo to GitHub Pages from master, and
+# attach all builds to a GitHub release when a v* tag is pushed.
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # Suites run on every build; all must have zero hard failures.
+  TEST_SUITES: >-
+    tiny.tst tactics.tst reading.tst atari_atari.tst owl.tst connect.tst
+    semeai.tst endgame.tst capture.tst 13x13.tst strategy.tst
+
+jobs:
+  native:
+    name: native (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64,   os: ubuntu-latest,  exe: build/src/interface/gnugo }
+          - { name: windows-x64, os: windows-latest, exe: build/src/interface/Release/gnugo.exe }
+          - { name: macos-arm64, os: macos-latest,   exe: build/src/interface/gnugo }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Regression tests
+        working-directory: tests
+        run: python run_tests.py "../${{ matrix.exe }}" --strict $TEST_SUITES
+
+      - name: Package
+        run: |
+          dir=gnugo-${{ matrix.name }}
+          mkdir -p dist/$dir
+          cp "${{ matrix.exe }}" COPYING README dist/$dir/
+          cd dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a -tzip ../gnugo-${{ matrix.name }}.zip $dir >/dev/null
+          else
+            tar czf ../gnugo-${{ matrix.name }}.tar.gz $dir
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnugo-${{ matrix.name }}
+          path: gnugo-${{ matrix.name }}.*
+          if-no-files-found: error
+
+  # Undefined behavior is fatal here: any UBSan report aborts the engine,
+  # which run_tests.py --strict reports as a crashed suite.
+  ubsan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          "-DCMAKE_C_FLAGS=-fsanitize=undefined -fno-sanitize-recover=all"
+          -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=undefined
+
+      - name: Build
+        run: cmake --build build --parallel 4
+
+      - name: Regression tests under UBSan
+        working-directory: tests
+        env:
+          UBSAN_OPTIONS: print_stacktrace=1
+          GNUGO_STDERR: ${{ runner.temp }}/ubsan.log
+        run: python run_tests.py ../build/src/interface/gnugo --strict $TEST_SUITES
+
+      - name: Show UBSan reports
+        if: failure()
+        run: grep -A15 "runtime error" "${{ runner.temp }}/ubsan.log" | head -100 || true
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 7.0.0
+
+      - name: Configure
+        run: emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-wasm --parallel 4
+
+      - name: Smoke test
+        run: node tests/wasm_smoke.cjs build-wasm/web/gnugo-core.js
+
+      - name: Regression tests (node)
+        working-directory: tests
+        run: python run_tests.py ../build-wasm/src/interface/gnugo.js --strict tiny.tst
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp -r build-wasm/web dist/gnugo-wasm
+          cp COPYING wasm/README.md dist/gnugo-wasm/
+          (cd dist && zip -qr ../gnugo-wasm.zip gnugo-wasm)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnugo-wasm
+          path: gnugo-wasm.zip
+          if-no-files-found: error
+
+      # Static site for GitHub Pages: the demo page plus the engine.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build-wasm/web
+
+  pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [native, ubsan, wasm]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [native, ubsan, wasm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gnugo-*
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -la gnugo-*
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" gnugo-* --clobber
+          else
+            gh release create "$TAG" gnugo-* --verify-tag --generate-notes \
+              --title "GNU Go $TAG"
+          fi

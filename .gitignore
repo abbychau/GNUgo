@@ -6,6 +6,7 @@
 # --- Build output (CMake) ---
 /build/
 /build-wasm/
+/build-ubsan/
 /out/
 /cmake-build-*/
 CMakeCache.txt

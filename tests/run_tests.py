@@ -22,6 +22,11 @@ Expected-result markers (same semantics as regress.awk/regress.pl):
 Usage:
     python run_tests.py <gnugo.exe> <suite.tst> [suite2.tst ...]
     python run_tests.py <gnugo.exe> --all        # every *.tst file
+    python run_tests.py <gnugo.exe> --strict tiny.tst
+                       # exit 1 on any hard failure or engine crash (for CI)
+
+<gnugo.exe> may also be an Emscripten build (gnugo.js), which is run
+under node. Set GNUGO_STDERR=<file> to keep the engine's stderr.
 
 The script changes to its own directory (tests/) before running, so
 relative paths such as "loadsgf games/foo.sgf" resolve correctly.
@@ -131,13 +136,22 @@ def run_suite2(suite_path, exe, verbose=False, engine_opts=None):
 
     # Phase 2: drive the engine.
     cmdline = [exe, "--mode", "gtp", "--quiet"]
+    # An Emscripten build (gnugo.js, linked with NODERAWFS) runs under node.
+    if exe.endswith(".js"):
+        cmdline.insert(0, "node")
     if engine_opts:
         cmdline += engine_opts
+    # GNUGO_STDERR=<file> appends the engine's stderr to a file, e.g. to
+    # collect sanitizer reports. By default stderr is discarded.
+    stderr_path = os.environ.get("GNUGO_STDERR")
+    stderr = open(stderr_path, "a") if stderr_path else subprocess.DEVNULL
     proc = subprocess.Popen(
         cmdline,
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, text=True, bufsize=1,
+        stderr=stderr, text=True, bufsize=1,
     )
+    if stderr_path:
+        stderr.close()
     try:
         for cmd, expected in pairs:
             if cmd is None:
@@ -174,7 +188,10 @@ def run_suite2(suite_path, exe, verbose=False, engine_opts=None):
             proc.stdin.flush()
         except OSError:
             pass
-        proc.stdin.close()
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass  # engine already exited (e.g. crashed mid-suite)
         proc.wait(timeout=10)
 
     return stats, details
@@ -186,6 +203,7 @@ def main(argv):
         return 2
     exe = argv[0]
     verbose = False
+    strict = False
     engine_opts = []
     args = []
     i = 1
@@ -193,6 +211,8 @@ def main(argv):
         a = argv[i]
         if a == "-v":
             verbose = True
+        elif a == "--strict":
+            strict = True
         elif a in ("-e", "--engine-opts"):
             i += 1
             if i < len(argv):
@@ -247,8 +267,10 @@ def main(argv):
               grand["unexpected-pass"], grand["ignore"], pct))
     if crashed:
         print("CRASHED SUITES:", ", ".join(crashed))
+    if strict and (grand["fail"] or crashed):
+        return 1
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:]))
