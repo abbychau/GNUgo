@@ -1972,7 +1972,18 @@ choose_mc_patterns(char *name)
   int k;
   for (k = 0; mc_pattern_databases[k].name; k++) {
     if (!name || strcmp(name, mc_pattern_databases[k].name) == 0) {
-      mc_init_patterns(mc_pattern_databases[k].values);
+      /* Expand the palette encoding written by mkmcpat. */
+      const struct mc_pattern_database *db = &mc_pattern_databases[k];
+      int n = mc_get_size_of_pattern_values_table();
+      unsigned int *values = malloc(n * sizeof(*values));
+      int i;
+
+      if (!values)
+	return 0;
+      for (i = 0; i < n; i++)
+	values[i] = db->palette[db->index[i]];
+      mc_init_patterns(values);
+      free(values);
       return 1;
     }
   }

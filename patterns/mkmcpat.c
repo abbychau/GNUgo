@@ -75,8 +75,11 @@ main(int argc, char *argv[])
 {
   int N = mc_get_size_of_pattern_values_table();
   unsigned int *values;
+  unsigned int palette[256];
+  int num_palette;
   int i;
   int k;
+  int m;
   char *name;
 
   if (argc < 2) {
@@ -124,10 +127,37 @@ main(int argc, char *argv[])
 
     name = copy_and_trim_name(argv[i]);
 
-    printf("static const unsigned int %s_values[] = {\n", name);
+    /* The tables hold only a handful of distinct values, so store them
+     * as a palette plus one byte per pattern, about a quarter of the
+     * size of a plain unsigned int table. choose_mc_patterns() rebuilds
+     * the full table.
+     */
+    num_palette = 0;
     for (k = 0; k < N; k++) {
-      printf("%u, ", values[k]);
-      if (k % 16 == 15)
+      for (m = 0; m < num_palette; m++)
+	if (palette[m] == values[k])
+	  break;
+      if (m == num_palette) {
+	if (num_palette == 256) {
+	  fprintf(stderr, "mkmcpat: %s has more than 256 distinct values\n",
+		  argv[i]);
+	  exit(EXIT_FAILURE);
+	}
+	palette[num_palette++] = values[k];
+      }
+    }
+
+    printf("static const unsigned int %s_palette[] = {\n", name);
+    for (m = 0; m < num_palette; m++)
+      printf("%u, ", palette[m]);
+    printf("\n};\n\n");
+
+    printf("static const unsigned char %s_index[] = {\n", name);
+    for (k = 0; k < N; k++) {
+      for (m = 0; palette[m] != values[k]; m++)
+	;
+      printf("%d,", m);
+      if (k % 32 == 31)
 	printf("\n");
     }
     printf("\n};\n\n");
@@ -138,10 +168,10 @@ main(int argc, char *argv[])
   printf("struct mc_pattern_database mc_pattern_databases[] = {\n");
   for (i = 1; i < argc; i++) {
     name = copy_and_trim_name(argv[i]);
-    printf("  {\"%s\", %s_values},\n", name, name);
+    printf("  {\"%s\", %s_palette, %s_index},\n", name, name, name);
     free(name);
   }
-  printf("  {NULL, NULL}};\n");
+  printf("  {NULL, NULL, NULL}};\n");
 
   return 0;
 }

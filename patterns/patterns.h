@@ -294,9 +294,13 @@ struct fullboard_pattern {
 
 
 /* Monte Carlo local patterns. */
+/* Monte Carlo pattern values, stored compactly: the value of pattern
+ * k is palette[index[k]]. See mkmcpat.c and choose_mc_patterns().
+ */
 struct mc_pattern_database {
   const char *name;
-  const unsigned int *values;
+  const unsigned int *palette;
+  const unsigned char *index;
 };
 
 
