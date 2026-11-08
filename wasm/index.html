@@ -21,6 +21,7 @@
   @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
   h1 { font-size: 20px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+  .sub a { color: var(--accent); }
   #board { width: 100%; aspect-ratio: 1; display: block; border-radius: 6px; cursor: pointer;
            box-shadow: 0 2px 10px rgba(0,0,0,.18); touch-action: manipulation; }
   aside { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
@@ -44,7 +45,10 @@
 <main>
   <section>
     <h1>GNU Go 3.8 — WebAssembly</h1>
-    <p class="sub">The engine runs entirely in your browser in a Web Worker. Your game is kept in this browser.</p>
+    <p class="sub">The engine runs entirely in your browser in a Web Worker. Your game is kept in this browser.
+      <a href="https://abbychau.github.io/GNUgo/differences.html">What's different from GNU Go 3.8</a> ·
+      <a href="https://abbychau.github.io/GNUgo/manual/">Manual</a> ·
+      <a href="https://github.com/abbychau/GNUgo">Source</a></p>
     <canvas id="board" width="760" height="760" aria-label="Go board"></canvas>
   </section>
   <aside>

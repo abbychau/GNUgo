@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Differences from GNU Go 3.8</title>
+<meta name="description" content="How this repository differs from the GNU Go 3.8 release: engine fixes, WebAssembly build, CMake, tests and layout.">
+<style>
+  :root {
+    --bg: #f4f1ea; --fg: #222; --muted: #6b6558; --panel: #fffdf8; --border: #d8d1c2;
+    --accent: #2f6f4e; --code: #ece6d8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17181a; --fg: #e8e6e1; --muted: #9a958a; --panel: #212226; --border: #34363b;
+            --accent: #5fb38a; --code: #2b2c31; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 16px 64px; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; margin-bottom: 28px; }
+  a { color: var(--accent); }
+  h1 { font-size: 28px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 20px; margin: 44px 0 10px; padding-top: 4px; }
+  h3 { font-size: 16px; margin: 24px 0 4px; }
+  p, li { max-width: 70ch; }
+  .lead { color: var(--muted); font-size: 17px; margin: 0 0 24px; }
+  code { font: 0.9em ui-monospace, Consolas, monospace; background: var(--code);
+         padding: 1px 5px; border-radius: 4px; }
+  .table { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 8px;
+           background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-top: 1px solid var(--border); }
+  thead th { border-top: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+  tbody th { font-weight: 600; white-space: nowrap; }
+  .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+          border-radius: 6px; padding: 12px 16px; margin: 20px 0; }
+  .note p { margin: 0; }
+  ul { padding-left: 22px; }
+  li { margin: 4px 0; }
+  .effect { color: var(--muted); }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border);
+           color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <nav aria-label="Site">
+    <a href="./">Play in the browser</a>
+    <a href="manual/">Manual</a>
+    <a href="https://github.com/abbychau/GNUgo">Source on GitHub</a>
+    <a href="https://github.com/abbychau/GNUgo/releases/latest">Downloads</a>
+  </nav>
+
+  <h1>How this repository differs from GNU&nbsp;Go&nbsp;3.8</h1>
+  <p class="lead">GNU Go 3.8, released by the GNU project on 17 February 2009, is the last
+  official release. This repository starts from the 3.8 sources and brings the build,
+  platforms and tests up to date. The engine is still GNU Go 3.8: the same pattern
+  databases, the same reading and the same GTP commands, with a few small fixes.</p>
+
+  <div class="note">
+    <p><strong>In short:</strong> it plays like GNU Go 3.8 and still reports version
+    3.8. What changed is how you build, test and use it: CMake instead of autotools,
+    ready-made programs for Windows, Linux and macOS, a WebAssembly build that runs in
+    web pages, and automated tests on every change.</p>
+  </div>
+
+  <h2 id="glance">At a glance</h2>
+  <div class="table">
+    <table>
+      <thead><tr><th scope="col"></th><th scope="col">GNU Go 3.8</th><th scope="col">This repository</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Engine</th><td>3.8</td><td>3.8 with a few small fixes (<a href="#engine">below</a>); identical results on the main regression suites</td></tr>
+        <tr><th scope="row">Build</th><td>autotools (<code>configure</code>, <code>make</code>), Visual Studio 6 projects, an optional CMake file for Windows</td><td>CMake only, on every platform, with presets</td></tr>
+        <tr><th scope="row">Runs in</th><td>Unix, Windows (built yourself)</td><td>Windows, Linux, macOS, web browsers and Node.js</td></tr>
+        <tr><th scope="row">Downloads</th><td>Source tarball</td><td>Programs for Windows x64, Linux x64, macOS (Apple silicon), a WebAssembly bundle and an npm package</td></tr>
+        <tr><th scope="row">Tests</th><td>Shell, awk, Perl and Pike scripts, run by hand</td><td>A Python runner and CTest, run by CI on four platforms, with an undefined behavior sanitizer build</td></tr>
+        <tr><th scope="row">Manual</th><td>Texinfo with prebuilt Info files</td><td>Built by CMake and published <a href="manual/">online</a></td></tr>
+        <tr><th scope="row">License</th><td colspan="2">GNU GPL version 3 or later (unchanged)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="engine">Engine changes</h2>
+  <p>Only these changes touch the engine. Everything else, including the pattern
+  databases, owl and tactical reading, influence, joseki and fuseki, the Monte Carlo
+  mode, the GTP commands and the command-line options, is as in 3.8.</p>
+
+  <h3>An owl pattern condition that never applied</h3>
+  <p>Pattern VA32 in <code>owl_vital_apats.db</code> has a constraint written as
+  <code>!oplay_attack(*,?,b,*)==WIN</code>. It is parsed as
+  <code>(!oplay_attack(…)) == WIN</code>, which is always false, so the condition added
+  in GNU Go 3.5.5 never took effect. It now reads <code>!= WIN</code>.</p>
+  <p class="effect">Effect: no change in the results of the 11 main suites, nor of
+  <code>ld_owl</code> and <code>owl1</code>.</p>
+
+  <h3>A larger reading budget in <code>fast_disconnect()</code></h3>
+  <p>The quick check for whether two strings can be cut used a quarter of the
+  connection reading budget. That was so little that the search often stopped at once
+  and answered “can be cut” by default. It now uses half the budget.</p>
+  <p class="effect">Effect: the 11 main suites give the same counts with either budget.
+  It can change the move chosen in some positions.</p>
+
+  <h3>Undefined behavior</h3>
+  <p>Modern compilers, and WebAssembly in particular, broke on code that older
+  compilers happened to accept:</p>
+  <ul>
+    <li><code>gg_sort()</code> computed an out-of-range pointer when sorting zero
+      elements. With clang this crashed <code>genmove</code>.</li>
+    <li>The random number generator shifted a negative signed integer.</li>
+    <li>The SGF reader moved a pointer before the start of its buffer when trimming an
+      empty property value.</li>
+    <li>A Windows socket macro relied on <code>defined</code> inside a macro expansion.</li>
+    <li>Two global tables were defined in a header, which newer compilers reject as
+      duplicate definitions.</li>
+  </ul>
+  <p class="effect">Effect: none on play. Every fix keeps the same results; the main
+  suites now run clean under UndefinedBehaviorSanitizer.</p>
+
+  <h3>Smaller Monte Carlo pattern tables</h3>
+  <p>The tables used by the experimental Monte Carlo mode are stored as a short list of
+  distinct values plus one byte per entry, and expanded to the original values at
+  startup.</p>
+  <p class="effect">Effect: the program is about 2.5 MB smaller (the WebAssembly module
+  went from 6.1 MB to 3.6 MB); Monte Carlo play is unchanged.</p>
+
+  <h3>Running one GTP command at a time</h3>
+  <p>The GTP loop was split so that a program can initialize the engine once and then
+  send single commands (<code>play_gtp_init()</code>, <code>play_gtp_execute()</code>,
+  <code>gtp_execute_line()</code>). The WebAssembly build uses this. The GTP protocol
+  itself is unchanged.</p>
+
+  <h2 id="web">GNU Go in web pages</h2>
+  <p>The biggest addition is a WebAssembly build. The whole engine, pattern databases
+  included, is compiled to a 3.6 MB module (about 1 MB to download) that runs in a Web
+  Worker, so the page stays responsive while GNU Go thinks.</p>
+  <ul>
+    <li><a href="./">A demo page</a>: play on 9×9, 13×13 or 19×19 with handicap and a time
+      limit, ask for hints, estimate the score, see dead stones and territory, and save
+      or load SGF files. The game is kept in your browser.</li>
+    <li>A JavaScript API with promises (<code>genmove</code>, <code>play</code>,
+      <code>undo</code>, <code>finalScore</code>, <code>topMoves</code>, any GTP command),
+      a way to stop a long search, and SGF import and export.</li>
+    <li>TypeScript types and an npm package, <code>@abbychau/gnugo-wasm</code>, attached to
+      each release and published to
+      <a href="https://github.com/abbychau/GNUgo/packages">GitHub Packages</a>.</li>
+    <li>The ordinary command-line program also runs under Node.js.</li>
+  </ul>
+  <p>CI checks that the WebAssembly and native builds choose exactly the same moves in
+  seeded games, so the browser version plays like the desktop one.</p>
+
+  <h2 id="build">Building</h2>
+  <ul>
+    <li>The autotools files (<code>configure</code>, <code>Makefile.am</code>, …),
+      the Visual Studio 6 projects and the old Windows config files are gone. CMake builds
+      every platform.</li>
+    <li><code>CMakePresets.json</code> has <code>release</code>, <code>debug</code>,
+      <code>ubsan</code> and <code>wasm</code> builds: <code>cmake --preset release</code>,
+      <code>cmake --build --preset release</code>, <code>ctest --preset release</code>.</li>
+    <li>The WebAssembly build needs only the Emscripten SDK: the pattern compilers are
+      themselves compiled to WebAssembly and run under Node.js during the build.</li>
+    <li><code>cmake --install</code> installs the program and the man page;
+      <code>--target manual</code> builds the HTML and Info manual.</li>
+    <li>Compile-time options are still set in <code>config.h.cmake</code>.</li>
+  </ul>
+
+  <h2 id="tests">Testing</h2>
+  <ul>
+    <li><code>tests/run_tests.py</code> runs the regression suites with nothing but
+      Python 3, in parallel, and compares the results with a stored baseline.</li>
+    <li>The 11 main suites (tactics, reading, owl, connection, semeai, endgame, capture,
+      13×13, strategy and more: 831 expected passes) are CTest tests.</li>
+    <li>Every push is built and tested on Linux, macOS, Windows and WebAssembly, plus a
+      build with UndefinedBehaviorSanitizer that fails on any undefined behavior.</li>
+    <li>The original shell, awk, Perl and Pike tools still work and are kept in
+      <code>contrib/regress/</code>.</li>
+  </ul>
+
+  <h2 id="layout">Where things moved</h2>
+  <div class="table">
+    <table>
+      <thead><tr><th scope="col">GNU Go 3.8</th><th scope="col">This repository</th></tr></thead>
+      <tbody>
+        <tr><td><code>engine/</code>, <code>interface/</code>, <code>sgf/</code>, <code>utils/</code></td><td><code>src/engine/</code>, <code>src/interface/</code>, <code>src/sgf/</code>, <code>src/utils/</code></td></tr>
+        <tr><td><code>regression/</code></td><td><code>tests/</code> (suites, game records, runner); old scripts in <code>contrib/regress/</code></td></tr>
+        <tr><td>Emacs mode, board images, GoImage, GTP examples in <code>interface/</code></td><td><code>contrib/</code></td></tr>
+        <tr><td><code>README</code>, <code>INSTALL</code>, <code>WINDOWS</code>, <code>OSX</code></td><td><code>README.md</code> and <code>BUILDING.md</code></td></tr>
+        <tr><td><code>AUTHORS</code>, <code>THANKS</code>, <code>TODO</code>, <code>ChangeLog</code></td><td><code>doc/</code> (unchanged apart from UTF-8 encoding)</td></tr>
+        <tr><td>—</td><td><code>wasm/</code>: Web Worker, JavaScript API, types, demo page</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="compat">Compatibility</h2>
+  <ul>
+    <li>GTP and GMP clients work exactly as before: the commands, responses and
+      command-line options are the same.</li>
+    <li>The program still reports <code>GNU Go 3.8</code>. Releases of this repository are
+      numbered 3.8.1 and up.</li>
+    <li>The license is unchanged: GPL version 3 or later, with the more permissive
+      licenses of the GTP and GMP files as in 3.8.</li>
+  </ul>
+
+  <footer>
+    <p>The full list of changes is in
+    <a href="https://github.com/abbychau/GNUgo/blob/master/NEWS">NEWS</a> and the
+    <a href="https://github.com/abbychau/GNUgo/commits/master">commit history</a>.
+    The original project is at
+    <a href="https://www.gnu.org/software/gnugo/">gnu.org/software/gnugo</a>.</p>
+  </footer>
+</main>
+</body>
+</html>

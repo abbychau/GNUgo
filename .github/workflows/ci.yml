@@ -177,7 +177,8 @@ jobs:
             gnugo-wasm-npm.tgz
           if-no-files-found: error
 
-      # GitHub Pages: the demo at the root, the manual under manual/.
+      # GitHub Pages: the demo at the root, the pages in pages/ next to it,
+      # and the manual under manual/.
       - name: Build the manual
         run: |
           sudo apt-get install -y -qq texinfo >/dev/null
@@ -187,6 +188,7 @@ jobs:
       - name: Assemble the site
         run: |
           cp -r build-wasm/web site
+          cp -r pages/. site/
           cp -r build/manual site/manual
 
       - uses: actions/upload-pages-artifact@v5

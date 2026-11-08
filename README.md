@@ -9,6 +9,7 @@ build, a WebAssembly port that runs in web pages, and automated tests
 on Linux, macOS, Windows and the browser build.
 
 - **Play in the browser:** <https://abbychau.github.io/GNUgo/>
+- **What's different from GNU Go 3.8:** <https://abbychau.github.io/GNUgo/differences.html>
 - **Manual:** <https://abbychau.github.io/GNUgo/manual/>
 - **Downloads:** [latest release](https://github.com/abbychau/GNUgo/releases/latest)
 
@@ -118,6 +119,7 @@ builds choose identical moves. See [tests/README](tests/README).
 | `src/sgf/` | Smart Game Format library |
 | `src/utils/` | Portability and utility functions |
 | `patterns/` | The pattern databases (`.db`, `.dtr`, `.dbz`, `.sgf`) and the generators (mkpat, joseki, dfa, ...) that compile them into C at build time |
+| `pages/` | Extra pages of the GitHub Pages site |
 | `wasm/` | Browser files: Web Worker, JavaScript API, TypeScript types, demo page, npm metadata |
 | `tests/` | Regression suites (`.tst`), their game records, `run_tests.py` and `baseline.json` |
 | `tests/tools/` | Native-vs-WebAssembly move comparison and the WebAssembly smoke test |
