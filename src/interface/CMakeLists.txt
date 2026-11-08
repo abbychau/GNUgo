@@ -27,7 +27,7 @@ ENDIF(UNIX)
 
 TARGET_LINK_LIBRARIES(gnugo sgf engine sgf utils patterns ${PLATFORM_LIBRARIES})
 
-INSTALL(TARGETS gnugo DESTINATION bin)
+INSTALL(TARGETS gnugo DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 ########### WebAssembly module (Emscripten only) ###############
 #

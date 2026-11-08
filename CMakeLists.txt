@@ -33,10 +33,12 @@ IF(WIN32)
     SET(PRAGMAS "#pragma warning(disable: 4244 4305)")
 ENDIF(WIN32)
 
-IF(MSVC80)
+IF(MSVC)
     ADD_DEFINITIONS(-D_CRT_SECURE_NO_DEPRECATE)
     ADD_DEFINITIONS(-D_CRT_NONSTDC_NO_DEPRECATE)
-ENDIF(MSVC80)
+ENDIF(MSVC)
+
+INCLUDE(GNUInstallDirs)
 
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
                ${CMAKE_CURRENT_BINARY_DIR}/config.h)
@@ -51,3 +53,8 @@ ADD_SUBDIRECTORY(src/sgf)
 ADD_SUBDIRECTORY(src/engine)
 ADD_SUBDIRECTORY(patterns)
 ADD_SUBDIRECTORY(src/interface)
+ADD_SUBDIRECTORY(doc)
+
+# Regression suites: ctest --test-dir build (see tests/CMakeLists.txt).
+ENABLE_TESTING()
+ADD_SUBDIRECTORY(tests)
