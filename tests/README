@@ -1,5 +1,32 @@
-The files with suffix .gtp and .res are automatically generated from
-the .tst files. Only edit the latter files.
+Regression tests for GNU Go.
 
-Please see the Texinfo documentation (Regression) for further
-information.
+Each .tst file is a test suite: GTP commands that set up positions,
+followed by "#?" lines with the expected answers. The game records the
+suites load are in games/ (and golois/). See the Texinfo manual,
+chapter "Regression", for the file format.
+
+Running the tests
+
+  ctest --test-dir ../build -j8          (add -C Release for Visual Studio)
+
+runs the main suites, one CTest test each. To run suites directly:
+
+  python run_tests.py ../build/src/interface/gnugo owl.tst
+  python run_tests.py ../build/src/interface/gnugo --key -j8 --baseline
+  python run_tests.py ../build/src/interface/gnugo --all -j8
+
+"python run_tests.py --help" lists the options. The engine may also be
+the WebAssembly build (gnugo.js), which is run under node.
+
+Files
+
+  run_tests.py    the test runner (Python 3 only)
+  baseline.json   pass / known-fail counts of the main suites; CTest and
+                  --baseline fail if a suite does worse. Update it with
+                  --key --update-baseline after an improvement.
+  tools/          compare_engines.py (do two builds play the same
+                  moves?) and wasm_smoke.cjs (WebAssembly module test)
+  benchmark/      GTP game logs against other programs
+
+The original shell, awk, Perl and Pike regression tools (regress.sh,
+eval.sh, regress.pike, view.pike, ...) are in ../contrib/regress.

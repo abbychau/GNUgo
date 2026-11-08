@@ -481,7 +481,7 @@ int main(int argc, array(string) argv)
   }
 
   if (engine == "") {
-    engine = "../src/interface/gnugo";
+    engine = "../build/src/interface/gnugo";
     engine_options |= "--quiet --mode gtp" / " ";
   }
 
@@ -547,7 +547,7 @@ string help_message =
 "      --check-unoccupied        Do not run regressions. Instead check that\n"
 "                                the listed answers are not occupied.\n"
 "  -e, --engine=ENGINE           Engine to run regressions on. Default is\n"
-"                                ../src/interface/gnugo.\n"
+"                                ../build/src/interface/gnugo.\n"
 "  -o, --options=OPTIONS         Options passed to the engine.\n"
 "  -f, --file=FILE               File containing a list of tests to run.\n"
 "  -j, --jobs=JOBS               Number of testsuites being run in parallel.\n"

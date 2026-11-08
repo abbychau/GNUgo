@@ -445,7 +445,7 @@ int main(int argc, array(string) argv)
     if (!find_font())
 	return 1;
 
-    SimpleGtp engine = SimpleGtp("../src/interface/gnugo --quiet --mode gtp -w -t -d0x101840" / " ");
+    SimpleGtp engine = SimpleGtp("../build/src/interface/gnugo --quiet --mode gtp -w -t -d0x101840" / " ");
     if (!engine)
     {
 	werror("Failed to start engine.");
@@ -1508,7 +1508,7 @@ class Controller
 	    next_testcase_button->signal_connect_new("clicked", next_testcase);
 	}
 	engine_path_entry = GTK.Entry();
-	engine_path_entry->set_text("../src/interface/gnugo");
+	engine_path_entry->set_text("../build/src/interface/gnugo");
 	engine_path_entry->set_editable(1);
 
 	engine_name_entry = GTK.Entry();

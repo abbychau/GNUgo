@@ -23,8 +23,8 @@ set b4=capture connect global vie arend 13x13 semeai STS-RV_0 STS-RV_1 STS-RV_e 
 set b5=owl1 handtalk nngs2 nngs3 nngs4 strategy5 century2002 auto01 auto02 auto03 auto04 auto_handtalk safety ninestones tactics1 manyfaces1 gunnar arend2 nando thrash 13x13b joseki gifu03 seki 9x9 cgf2004 kgs olympiad2004 tiny gifu05 13x13c 
 
 rem Check for regress.awk, fail if not present.
-if not exist regress.awk echo ERROR: cannot find regress.awk. aborting...
-if not exist regress.awk goto done
+if not exist "%~dp0regress.awk" echo ERROR: cannot find regress.awk. aborting...
+if not exist "%~dp0regress.awk" goto done
 
 rem Optionally get gnugo.exe location from command line; fail if not found.
 if "%1"=="" set gnugo=..\src\interface\gnugo.exe
@@ -33,11 +33,11 @@ if not exist %gnugo% echo ERROR: cannot find gnugo.exe executable [%gnugo%]. abo
 if not exist %gnugo% goto done
 
 rem Finally, do the actual testing.
-for %%t in (%b1%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f regress.awk tst=%%t.tst
-for %%t in (%b2%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f regress.awk tst=%%t.tst
-for %%t in (%b3%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f regress.awk tst=%%t.tst
-for %%t in (%b4%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f regress.awk tst=%%t.tst
-for %%t in (%b5%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f regress.awk tst=%%t.tst
+for %%t in (%b1%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f "%~dp0regress.awk" tst=%%t.tst
+for %%t in (%b2%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f "%~dp0regress.awk" tst=%%t.tst
+for %%t in (%b3%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f "%~dp0regress.awk" tst=%%t.tst
+for %%t in (%b4%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f "%~dp0regress.awk" tst=%%t.tst
+for %%t in (%b5%) do %gnugo% --quiet --mode gtp < %%t.tst | awk -f "%~dp0regress.awk" tst=%%t.tst
 
 :done
 

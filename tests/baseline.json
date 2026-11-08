@@ -1,4 +1,11 @@
 {
+  "13x13.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 27,
+    "pass": 63,
+    "unexpected_pass": 0
+  },
   "atari_atari.tst": {
     "fail": 0,
     "ignore": 0,
@@ -46,6 +53,13 @@
     "ignore": 0,
     "known_fail": 27,
     "pass": 119,
+    "unexpected_pass": 0
+  },
+  "strategy.tst": {
+    "fail": 0,
+    "ignore": 0,
+    "known_fail": 8,
+    "pass": 37,
     "unexpected_pass": 0
   },
   "tactics.tst": {

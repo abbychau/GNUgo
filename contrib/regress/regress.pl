@@ -162,7 +162,7 @@ if ($make_images) {
 
 my $s = (lc ($^O) eq 'mswin32') ? '\\' : '/';
 if (!$goprog) {
-  $goprog = "..${s}src${s}interface${s}gnugo";
+  $goprog = "..${s}build${s}src${s}interface${s}gnugo";
 }
 
 if ($goprog !~ / /) {

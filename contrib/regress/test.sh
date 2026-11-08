@@ -1,6 +1,6 @@
 #!/bin/sh
 
-GNUGO=../src/interface/gnugo
+GNUGO=${GNUGO:-../build/src/interface/gnugo}
 
 gtpfile=$1
 options=$2   # May be omitted

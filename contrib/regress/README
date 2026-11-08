@@ -1,0 +1,26 @@
+The original GNU Go regression tools.
+
+These scripts come from the autotools era of GNU Go. They still work
+but are no longer needed for normal testing: tests/run_tests.py and
+ctest do the same with Python only (see tests/README).
+
+Run them from the tests/ directory. They use the engine named by the
+GNUGO environment variable, by default ../build/src/interface/gnugo:
+
+  cd tests
+  GNUGO=../build/src/interface/gnugo sh ../contrib/regress/eval.sh blunder.tst
+  sh ../contrib/regress/regress.sh . blunder.tst
+  pike ../contrib/regress/regress.pike --engine ../build/src/interface/gnugo owl
+  pike ../contrib/regress/view.pike strategy:40
+
+  regress.sh, eval.sh,   run one suite and report its results (awk)
+  test.sh, regress.awk
+  eval3.sh, regress.pl,  HTML views of the regression results (Perl, CGI)
+  regress.plx
+  regress.pike           run suites in parallel with timing statistics (Pike)
+  view.pike              inspect a test case on a graphical board (Pike, GTK)
+  regress.cmd            Windows version of regress.sh (needs awk)
+  BREAKAGE               log of test results that changed between versions
+  breakage2tst.py        update .tst files from BREAKAGE (Python 2)
+
+The Texinfo manual, chapter "Regression", describes them in detail.

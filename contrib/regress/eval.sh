@@ -1,11 +1,11 @@
 #!/bin/sh
 
 if test ! "$GNUGO"; then
-	GNUGO=../src/interface/gnugo
+	GNUGO=../build/src/interface/gnugo
 fi
 
 if test ! "$RD"; then
-	RD=.
+	RD=`dirname "$0"`
 fi
 
 tstfile=$1
