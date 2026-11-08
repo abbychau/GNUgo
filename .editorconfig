@@ -1,0 +1,30 @@
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{c,h}]
+# GNU style: 2-space indent, tabs for each 8 columns.
+indent_style = space
+indent_size = 2
+tab_width = 8
+
+[*.{py,cjs,js,ts,json,yml,yaml,html,css}]
+indent_style = space
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+[{CMakeLists.txt,*.cmake}]
+indent_style = space
+indent_size = 4
+
+[*.{tst,db,dtr,sgf}]
+trim_trailing_whitespace = false
+
+[*.{cmd,bat}]
+end_of_line = crlf

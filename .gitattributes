@@ -1,0 +1,19 @@
+# Line endings. Text files are stored with LF; files that were committed
+# with CRLF (many game records and older scripts) are left as they are,
+# since Git does not renormalize files that already contain CRLF.
+* text=auto eol=lf
+
+# Windows command scripts need CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Game records are test data: keep them byte for byte.
+*.sgf -text
+
+# Binary files.
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.tgz  binary
+*.wasm binary
+*.info -text
