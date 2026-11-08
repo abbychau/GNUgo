@@ -1,3 +1,30 @@
+New in 3.8.1 (since 3.8)
+
+Engine
+- fix an owl pattern constraint (VA32) that never took effect
+- fast_disconnect() no longer gives up almost at once, which made owl
+  treat connected strings as cut
+- fix undefined behavior found by UndefinedBehaviorSanitizer
+- the Monte Carlo pattern tables are stored compactly, making the
+  program about 2.5 MB smaller
+
+Build and platforms
+- CMake build replaces autotools and the old Visual Studio projects;
+  CMake presets for release, debug, ubsan and wasm builds
+- WebAssembly build for web pages and Node.js: a Web Worker engine with
+  a Promise-based JavaScript API, cancel and time limits, SGF load and
+  save, TypeScript types, an npm package and a playable demo page
+- `cmake --install` also installs the man page; `--target manual`
+  builds the HTML and Info manual
+
+Testing
+- tests/run_tests.py runs the .tst suites with Python only, in
+  parallel, and compares results with tests/baseline.json
+- the main suites are registered with CTest
+- CI on Linux, macOS, Windows and WebAssembly, an UBSan build, and a
+  check that native and WebAssembly builds choose identical moves
+- the original regression scripts moved to contrib/regress
+
 New in 3.8 (since 3.6)
 
 - many small improvements and tuning since 3.6

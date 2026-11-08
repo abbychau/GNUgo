@@ -2,12 +2,14 @@
 
 ## Build
 
-Requires the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html), CMake and a make tool.
+Requires the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html), CMake 3.25+ and Node.js
+(on Windows also GNU make).
 
 ```sh
-source ~/emsdk/emsdk_env.sh          # Windows: emsdk_env.bat
-emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release   # add -G "MinGW Makefiles" on Windows
-cmake --build build-wasm -j8
+source ~/emsdk/emsdk_env.sh     # Windows: emsdk_env.bat
+cmake --preset wasm             # Windows: --preset wasm-windows
+cmake --build --preset wasm
+ctest --preset wasm             # regression suites under node + smoke test
 ```
 
 The pattern generators (mkpat, joseki, ...) are compiled with Emscripten
@@ -94,7 +96,14 @@ own `printsgf` snapshot of the current position.
 
 ### Without the worker
 
-In C, the module
+`gnugo-core.js` can also be used directly, e.g. in Node.js. The module
+exports the C functions `gnugo_wasm_init(seed, memory_mb)` and
+`gnugo_wasm_gtp(line)` (see `src/interface/wasm_api.c`):
 
-exports `gnugo_wasm_init(seed, memory_mb)` and `gnugo_wasm_gtp(line)`
-(see `src/interface/wasm_api.c`) for use without the worker.
+```js
+import createGnuGoModule from "./gnugo-core.js";
+const m = await createGnuGoModule({ print: () => {} });
+m.ccall("gnugo_wasm_init", "number", ["number", "number"], [42, -1]);
+const gtp = m.cwrap("gnugo_wasm_gtp", "string", ["string"]);
+gtp("genmove black");   // "= D4\n\n"
+```

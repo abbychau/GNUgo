@@ -31,12 +31,11 @@ if a change breaks something.
 Regression testing is performed by the files in the @file{tests/}
 directory. The tests are specified as GTP commands in files with the
 suffix @file{.tst}, with corresponding correct results and expected
-pass/fail status encoded in GTP comments following the test. To run a
-test suite the shell scripts @file{test.sh}, @file{eval.sh}, and
-@file{regress.sh} can be used. There are also Makefile targets to do
-this. If you @command{make all_batches} most of the tests are run. The
-Pike script @file{regress.pike} can also be used to run all tests or a
-subset of the tests.
+pass/fail status encoded in GTP comments following the test. Test
+suites are run with the Python script @file{tests/run_tests.py}, which
+is also what @command{ctest} uses (@pxref{Running the Regressions}).
+The older shell, awk, Perl and Pike tools described below are kept in
+@file{contrib/regress/}.
 
 Game records used by the regression tests are stored in the
 directory @file{tests/games/} and its subdirectories.
@@ -92,7 +91,41 @@ nodes were spent while running the test suite.
 @node Running the Regressions
 @section Running the Regression Tests
 
-@code{./test.sh blunder.tst} runs the tests in @file{blunder.tst} and
+The main suites are registered with CTest, so after building
+
+@example
+ctest --test-dir build -j8              # add -C Release for Visual Studio
+@end example
+
+@noindent
+runs them in parallel. A suite fails on any unexpected failure, if the
+engine crashes, or if it has fewer passes or more expected failures
+than recorded in @file{tests/baseline.json}.
+
+@file{tests/run_tests.py} runs any suite directly and only needs
+Python 3:
+
+@example
+python tests/run_tests.py build/src/interface/gnugo blunder.tst
+python tests/run_tests.py build/src/interface/gnugo --key -j8 --baseline
+@end example
+
+@noindent
+It prints the number of passes, failures, expected failures and
+unexpected passes of each suite and lists the failing tests. Useful
+options are @option{--key} (the suites CTest runs), @option{--all}
+(every suite), @option{-j N} (run suites in parallel),
+@option{--strict} (exit with an error on any failure),
+@option{--baseline} and @option{--update-baseline} (compare with or
+update @file{baseline.json}), @option{-e OPTIONS} (extra engine
+options) and @option{-v} (show every failure). The engine may also be
+the WebAssembly build @file{gnugo.js}, which is run under Node.js.
+
+The older scripts are run from the @file{tests/} directory. They use
+the engine in @env{GNUGO}, by default
+@file{../build/src/interface/gnugo}.
+
+@code{../contrib/regress/test.sh blunder.tst} runs the tests in @file{blunder.tst} and
 prints the results of the commands on numbered lines, which may look
 like:
 
@@ -113,7 +146,7 @@ like:
 @end example
 
 This is usually not very informative, however. More interesting is
-@code{./eval.sh blunder.tst} which also compares the results above
+@code{../contrib/regress/eval.sh blunder.tst} which also compares the results above
 against the correct ones in the test file and prints a report for each
 test on the form:
 
@@ -164,7 +197,8 @@ something.
 
 @end itemize
 
-If you want a less verbose report, @code{./regress.sh . blunder.tst}
+If you want a less verbose report,
+@code{../contrib/regress/regress.sh . blunder.tst}
 does the same thing as the previous command, but only reports unexpected
 results. The example above is compressed to
 
@@ -174,20 +208,17 @@ results. The example above is compressed to
 7 unexpected PASS!
 @end example
 
-For convenience the tests are also available as makefile targets. For
-example, @code{make blunder} runs the tests in the blunder test suite by
-executing @code{eval.sh blunder.tst}. @code{make all_batches} runs all
-test suites in a sequence using the @code{regress.sh} script.
 
 @node Running regress.pike
 @section Running regress.pike
 
 A more powerful way to run regressions is with the script
-@file{regress.pike}. This requires that you have Pike
+@file{contrib/regress/regress.pike}. This requires that you have Pike
 (@url{http://pike.ida.liu.se}) installed.
 
-Executing @code{./regress.pike} without arguments will run all
-testsuites that @code{make all_batches} would run. The difference is
+Executing @code{pike ../contrib/regress/regress.pike} from the
+@file{tests/} directory without arguments will run all the test suites
+listed in the script. The difference is
 that unexpected results are reported immediately when they have been
 found (instead of after the whole file has been run) and that statistics
 of time consumption and node usage is presented for each test file and
@@ -239,8 +270,8 @@ you may get an ascii board with the coordinate grid using
 @section HTML Regression Views
 
 Extremely useful HTML Views of the regression tests may be
-produced using two perl scripts @file{tests/regress.pl}
-and @file{tests/regress.plx}.
+produced using two perl scripts @file{contrib/regress/regress.pl}
+and @file{contrib/regress/regress.plx}.
 
 @enumerate
 @item The driver program (regress.pl) which:
@@ -310,9 +341,9 @@ html views from.
 You will also need to install the Perl module GD
 (@url{http://search.cpan.org/dist/GD/}), available from CPAN.
 
-Finally, run @file{tests/regress.pl} to create the xml data used to
+Finally, run @file{contrib/regress/regress.pl} to create the xml data used to
 generate the html views (to do all regression tests run
-@file{tests/regress.pl -a 1}); then, copy the @file{html/} directory to
+@file{contrib/regress/regress.pl -a 1}); then, copy the @file{html/} directory to
 the same directory as @file{regress.plx} resides in.
 
 At this point, you should have a working copy of the html regression views.

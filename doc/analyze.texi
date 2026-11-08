@@ -189,9 +189,10 @@ Similarly you can get the worm data with @command{worm P12}.
 @cindex debugging on a graphical board
 
 The quickest way to analyze most positions is to use the tool
-@file{view.pike} in the @file{regression} directory. It can be started
-with a testcase specified, e.g. @command{pike view.pike strategy:40} or
-at a move in an sgf file, e.g. @command{pike view.pike mistake.sgf:125}.
+@file{view.pike} in the @file{contrib/regress} directory. It can be started
+from the @file{tests} directory with a testcase specified, e.g.
+@command{pike ../contrib/regress/view.pike strategy:40} or
+at a move in an sgf file, e.g. @command{pike ../contrib/regress/view.pike mistake.sgf:125}.
 When started it shows the position on a grapical board on which it also
 marks information like move values, dragon status, and so on. By
 clicking on the board further information about the valuation of moves,

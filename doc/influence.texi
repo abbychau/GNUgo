@@ -1086,7 +1086,7 @@ help you to quickly find out the responsible pattern.
 @node Influence Tuning
 @section Influence Tuning with @code{view.pike}
 
-A useful program in the regression directory is @code{view.pike}.
+A useful program in the @file{contrib/regress} directory is @code{view.pike}.
 To run it, you need Pike, which you may download from
 @url{http://pike.ida.liu.se/}.
 
@@ -1094,7 +1094,7 @@ The test case @file{endgame:920} fails in GNU Go 3.6. We will
 explain how to fix it.
 
 Start by firing up view.pike on testcase endgame:920, e.g. by running
-@command{pike view.pike endgame:920} in the regression directory.
+@command{pike ../contrib/regress/view.pike endgame:920} in the @file{tests} directory.
 
 We see from the first view of move values that filling dame at P15 is
 valued highest with 0.17 points while the correct move at C4 is valued
