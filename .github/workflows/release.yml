@@ -1,0 +1,111 @@
+# Publish a GitHub release when a v* tag is pushed.
+#
+# Nothing is rebuilt: the job waits for the CI run of the tagged commit
+# and attaches its builds. If that commit has no CI run (for example
+# CI skipped it because only documentation changed), CI is started for
+# the tag. The release notes are the version's section of NEWS.
+#
+# If the repository has an NPM_TOKEN secret, the npm package is
+# published as well.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # create the release
+  actions: write    # start CI for the tag if needed
+  id-token: write   # npm provenance
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the npm package version
+        run: |
+          version=$(node -p 'require("./wasm/package.json").version')
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::wasm/package.json has version $version, but the tag is $TAG"
+            exit 1
+          fi
+
+      - name: Wait for CI on this commit
+        id: ci
+        run: |
+          find_run() {
+            gh run list --workflow ci.yml --commit "$GITHUB_SHA" --limit 20 \
+              --json databaseId,event,conclusion \
+              --jq '[.[] | select(.event == "push" or .event == "workflow_dispatch")
+                         | select(.conclusion != "cancelled")][0].databaseId // empty'
+          }
+          # A push of master and the tag together starts both workflows at
+          # once; give the CI run a moment to appear.
+          for _ in $(seq 12); do
+            run=$(find_run)
+            [ -n "$run" ] && break
+            sleep 10
+          done
+          if [ -z "$run" ]; then
+            echo "No CI run for $GITHUB_SHA; starting CI for $TAG"
+            gh workflow run ci.yml --ref "$TAG"
+            for _ in $(seq 30); do
+              sleep 10
+              run=$(find_run)
+              [ -n "$run" ] && break
+            done
+          fi
+          if [ -z "$run" ]; then
+            echo "::error::Could not find or start a CI run for $GITHUB_SHA"
+            exit 1
+          fi
+          echo "CI run: $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$run"
+          gh run watch "$run" --exit-status --interval 30 > /dev/null
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+      - name: Download the builds
+        run: |
+          gh run download "${{ steps.ci.outputs.run }}" --pattern 'gnugo-*' --dir artifacts
+          mkdir dist
+          find artifacts -type f -exec mv {} dist/ \;
+          ls -la dist
+
+      - name: Release notes from NEWS
+        run: |
+          version=${TAG#v}
+          awk -v v="$version" '
+            $0 ~ "^New in " v " " { found = 1; next }
+            found && /^New in / { exit }
+            found { print }' NEWS > notes.md
+          cat notes.md
+
+      - name: Create or update the release
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --verify-tag --title "GNU Go $TAG" \
+              --notes-file notes.md --generate-notes
+          fi
+
+      - uses: actions/setup-node@v7
+        if: env.NPM_TOKEN != ''
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish to npm
+        if: env.NPM_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish dist/gnugo-wasm-npm.tgz --access public --provenance

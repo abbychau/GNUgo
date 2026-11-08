@@ -1,13 +1,23 @@
-# Build GNU Go natively (Linux, Windows, macOS) and as WebAssembly, run the
-# regression suites, publish the web demo to GitHub Pages from master, and
-# attach all builds to a GitHub release when a v* tag is pushed.
+# Build GNU Go natively (Linux, Windows, macOS), with UBSan, and as
+# WebAssembly; run the regression suites; publish the web demo and the
+# manual to GitHub Pages from master. Releases are made by release.yml,
+# which reuses the builds of this workflow.
 name: CI
 
 on:
   push:
     branches: [master, main]
-    tags: ["v*"]
+    paths-ignore: &docs-only
+      - "**.md"
+      - NEWS
+      - TODO
+      - AUTHORS
+      - THANKS
+      - ChangeLog
+      - .editorconfig
+      - .github/dependabot.yml
   pull_request:
+    paths-ignore: *docs-only
   workflow_dispatch:
 
 permissions:
@@ -15,13 +25,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
-
-env:
-  # Suites run on every build; all must have zero hard failures.
-  TEST_SUITES: >-
-    tiny.tst tactics.tst reading.tst atari_atari.tst owl.tst connect.tst
-    semeai.tst endgame.tst capture.tst 13x13.tst strategy.tst
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   native:
@@ -38,27 +42,36 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
+      # The Visual Studio generator cannot use a compiler launcher.
+      - uses: hendrikmuhs/ccache-action@v1.2.24
+        if: runner.os != 'Windows'
+        with:
+          key: native-${{ matrix.name }}
+
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: |
+          if [ "${{ runner.os }}" != "Windows" ]; then
+            launcher=-DCMAKE_C_COMPILER_LAUNCHER=ccache
+          fi
+          cmake --preset release ${launcher:+"$launcher"}
 
       - name: Build
-        run: cmake --build build --config Release --parallel 4
+        run: cmake --build --preset release --parallel 4
 
       - name: Regression tests
-        working-directory: tests
-        run: python run_tests.py "../${{ matrix.exe }}" --strict $TEST_SUITES
+        run: ctest --preset release -j 4
 
       - name: Package
         run: |
           dir=gnugo-${{ matrix.name }}
           mkdir -p dist/$dir
-          cp "${{ matrix.exe }}" COPYING README dist/$dir/
+          cp "${{ matrix.exe }}" COPYING README.md NEWS doc/gnugo.6 dist/$dir/
           cd dist
           if [ "${{ runner.os }}" = "Windows" ]; then
             7z a -tzip ../gnugo-${{ matrix.name }}.zip $dir >/dev/null
@@ -66,38 +79,37 @@ jobs:
             tar czf ../gnugo-${{ matrix.name }}.tar.gz $dir
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gnugo-${{ matrix.name }}
           path: gnugo-${{ matrix.name }}.*
           if-no-files-found: error
 
   # Undefined behavior is fatal here: any UBSan report aborts the engine,
-  # which run_tests.py --strict reports as a crashed suite.
+  # which fails the suite.
   ubsan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
+      - uses: hendrikmuhs/ccache-action@v1.2.24
+        with:
+          key: ubsan
+
       - name: Configure
-        run: >
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          "-DCMAKE_C_FLAGS=-fsanitize=undefined -fno-sanitize-recover=all"
-          -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=undefined
+        run: cmake --preset ubsan -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build --parallel 4
+        run: cmake --build --preset ubsan --parallel 4
 
       - name: Regression tests under UBSan
-        working-directory: tests
         env:
-          UBSAN_OPTIONS: print_stacktrace=1
           GNUGO_STDERR: ${{ runner.temp }}/ubsan.log
-        run: python run_tests.py ../build/src/interface/gnugo --strict $TEST_SUITES
+        run: ctest --preset ubsan -j 4
 
       - name: Show UBSan reports
         if: failure()
@@ -106,39 +118,46 @@ jobs:
   wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
-      - uses: mymindstorm/setup-emsdk@v14
+      - uses: mymindstorm/setup-emsdk@v16
         with:
           version: 7.0.0
+          actions-cache-folder: emsdk-cache
+
+      - uses: hendrikmuhs/ccache-action@v1.2.24
+        with:
+          key: wasm-native
+
+      - name: Set EMSDK for the preset
+        run: |
+          emsdk_dir=${EMSDK:-$(cd "$(dirname "$(command -v emcc)")/../.." && pwd)}
+          echo "EMSDK=$emsdk_dir" >> "$GITHUB_ENV"
 
       - name: Configure
-        run: emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release
+        run: cmake --preset wasm
 
       - name: Build
-        run: cmake --build build-wasm --parallel 4
+        run: cmake --build --preset wasm --parallel 4
 
-      - name: Smoke test
-        run: node tests/wasm_smoke.cjs build-wasm/web/gnugo-core.js
-
-      - name: Regression tests (node)
-        working-directory: tests
-        run: python run_tests.py ../build-wasm/src/interface/gnugo.js --strict tiny.tst
+      # The 11 regression suites under node, plus the module smoke test.
+      - name: Tests
+        run: ctest --preset wasm -j 4
 
       # The native and WebAssembly builds must choose identical moves; a
       # difference means undefined or platform-dependent behavior.
       - name: Native build for comparison
         run: |
-          cmake -S . -B build-native -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-native --parallel 4 --target gnugo
+          cmake --preset release -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          cmake --build --preset release --parallel 4 --target gnugo
 
       - name: Compare native and WebAssembly moves
         run: >
-          python tests/compare_engines.py build-native/src/interface/gnugo
+          python tests/tools/compare_engines.py build/src/interface/gnugo
           build-wasm/src/interface/gnugo.js --moves 40
 
       - name: Package
@@ -150,7 +169,7 @@ jobs:
           (cd build-wasm/web && npm pack --pack-destination ../..)
           mv abbychau-gnugo-wasm-*.tgz gnugo-wasm-npm.tgz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gnugo-wasm
           path: |
@@ -158,10 +177,21 @@ jobs:
             gnugo-wasm-npm.tgz
           if-no-files-found: error
 
-      # Static site for GitHub Pages: the demo page plus the engine.
-      - uses: actions/upload-pages-artifact@v3
+      # GitHub Pages: the demo at the root, the manual under manual/.
+      - name: Build the manual
+        run: |
+          sudo apt-get install -y -qq texinfo >/dev/null
+          cmake --preset release
+          cmake --build --preset release --target manual
+
+      - name: Assemble the site
+        run: |
+          cp -r build-wasm/web site
+          cp -r build/manual site/manual
+
+      - uses: actions/upload-pages-artifact@v5
         with:
-          path: build-wasm/web
+          path: site
 
   pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -175,30 +205,4 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
-        uses: actions/deploy-pages@v4
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [native, ubsan, wasm]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: gnugo-*
-          merge-multiple: true
-
-      - name: Create or update release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          ls -la gnugo-*
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" gnugo-* --clobber
-          else
-            gh release create "$TAG" gnugo-* --verify-tag --generate-notes \
-              --title "GNU Go $TAG"
-          fi
+        uses: actions/deploy-pages@v5
