@@ -10,10 +10,10 @@ on:
     paths-ignore: &docs-only
       - "**.md"
       - NEWS
-      - TODO
-      - AUTHORS
-      - THANKS
-      - ChangeLog
+      - doc/TODO
+      - doc/AUTHORS
+      - doc/THANKS
+      - doc/ChangeLog
       - .editorconfig
       - .github/dependabot.yml
   pull_request:

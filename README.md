@@ -121,7 +121,7 @@ builds choose identical moves. See [tests/README](tests/README).
 | `wasm/` | Browser files: Web Worker, JavaScript API, TypeScript types, demo page, npm metadata |
 | `tests/` | Regression suites (`.tst`), their game records, `run_tests.py` and `baseline.json` |
 | `tests/tools/` | Native-vs-WebAssembly move comparison and the WebAssembly smoke test |
-| `doc/` | Texinfo manual and man page |
+| `doc/` | Texinfo manual, man page, and the original project's AUTHORS, THANKS, TODO and ChangeLog |
 | `contrib/` | Emacs mode, board images, a Perl module, GTP examples, and the original regression tools (`contrib/regress/`) |
 | `.github/workflows/` | CI, GitHub Pages and releases |
 
@@ -135,9 +135,11 @@ not the generated C files.
   algorithms. Read it [online](https://abbychau.github.io/GNUgo/manual/)
   or build it with `cmake --build build --target manual` (needs
   `makeinfo`).
-- [NEWS](NEWS) lists the changes in each version, [TODO](TODO) has
-  ideas for contributors, and [ChangeLog](ChangeLog) is the detailed
-  history of the original project.
+- [NEWS](NEWS) lists the changes in each version.
+  [doc/TODO](doc/TODO) has ideas for contributors (from the original
+  project), [doc/ChangeLog](doc/ChangeLog) is its detailed history up
+  to 3.8, and [doc/AUTHORS](doc/AUTHORS) and [doc/THANKS](doc/THANKS)
+  credit its authors and helpers.
 
 The original GNU Go project is at
 <https://www.gnu.org/software/gnugo/> (mailing list: gnugo@gnu.org).
