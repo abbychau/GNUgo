@@ -38,6 +38,17 @@ TypeScript types in `gnugo.d.ts`). Tagged GitHub releases attach it as
 npm install ./gnugo-wasm-npm.tgz
 ```
 
+It is also published to [GitHub Packages](https://github.com/abbychau/GNUgo/packages).
+GitHub's npm registry needs a personal access token with the
+`read:packages` scope, even for public packages. Add to `.npmrc`:
+
+```
+@abbychau:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=YOUR_TOKEN
+```
+
+and run `npm install @abbychau/gnugo-wasm`.
+
 The engine runs in a worker that loads `gnugo-core.js` and
 `gnugo-core.wasm` next to it, so serve these three files together. With
 a bundler, copy `gnugo-worker.js`, `gnugo-core.js` and `gnugo-core.wasm`

@@ -5,24 +5,34 @@
 # CI skipped it because only documentation changed), CI is started for
 # the tag. The release notes are the version's section of NEWS.
 #
-# If the repository has an NPM_TOKEN secret, the npm package is
-# published as well.
+# The npm package (gnugo-wasm-npm.tgz from the release) is then
+# published to GitHub Packages, and to npmjs.com if the repository has
+# an NPM_TOKEN secret. To publish the packages of an existing release,
+# run this workflow by hand (Actions > Release > Run workflow) with its
+# tag.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag whose npm package to publish (e.g. v3.8.1)
+        required: true
 
 permissions:
   contents: write   # create the release
   actions: write    # start CI for the tag if needed
+  packages: write   # publish to GitHub Packages
   id-token: write   # npm provenance
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
 
 jobs:
   release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -98,14 +108,55 @@ jobs:
               --notes-file notes.md --generate-notes
           fi
 
+  packages:
+    needs: release
+    # Also runs by hand, when the release job is skipped.
+    if: ${{ !cancelled() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - name: Download the npm package from the release
+        id: pkg
+        run: |
+          gh release download "$TAG" --pattern gnugo-wasm-npm.tgz
+          tar xzf gnugo-wasm-npm.tgz package/package.json
+          echo "name=$(node -p 'require("./package/package.json").name')" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p 'require("./package/package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          SPEC: ${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}
+        run: |
+          if npm view "$SPEC" version > /dev/null 2>&1; then
+            echo "$SPEC is already on GitHub Packages"
+          else
+            npm publish gnugo-wasm-npm.tgz
+          fi
+
       - uses: actions/setup-node@v7
         if: env.NPM_TOKEN != ''
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Publish to npm
+      - name: Publish to npmjs.com
         if: env.NPM_TOKEN != ''
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish dist/gnugo-wasm-npm.tgz --access public --provenance
+          SPEC: ${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}
+        run: |
+          if npm view "$SPEC" version > /dev/null 2>&1; then
+            echo "$SPEC is already on npmjs.com"
+          else
+            npm publish gnugo-wasm-npm.tgz --access public --provenance
+          fi
