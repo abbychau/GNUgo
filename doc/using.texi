@@ -350,6 +350,13 @@ Number of Monte Carlo simulations per level. Default 8000.
 Thus at level 10, GNU Go simulates 80,000 games in order
 to generate a move.
 @end quotation
+@item @option{--mc-rave <k>}
+@quotation
+Weight of RAVE (rapid action value estimation) in the Monte Carlo
+search. Each node also keeps all-moves-as-first statistics, which
+dominate a move's value until it has about @var{k} simulations of its
+own. Default 1000; 0 gives the plain UCT search of GNU Go 3.8.
+@end quotation
 @item @option{--mc-list-patterns}
 @quotation
 list names of builtin Monte Carlo patterns

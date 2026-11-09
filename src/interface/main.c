@@ -160,6 +160,7 @@ enum {OPT_BOARDSIZE = 127,
       OPT_NEVER_RESIGN,
       OPT_MONTE_CARLO,
       OPT_MC_GAMES_PER_LEVEL,
+      OPT_MC_RAVE,
       OPT_MC_PATTERNS,
       OPT_MC_LIST_PATTERNS,
       OPT_MC_LOAD_PATTERNS
@@ -312,6 +313,7 @@ static struct gg_option const long_options[] =
   {"never-resign",   no_argument,       0, OPT_NEVER_RESIGN},
   {"monte-carlo",    no_argument,       0, OPT_MONTE_CARLO},
   {"mc-games-per-level", required_argument, 0, OPT_MC_GAMES_PER_LEVEL},
+  {"mc-rave",        required_argument, 0, OPT_MC_RAVE},
   {"mc-patterns",    required_argument, 0, OPT_MC_PATTERNS},
   {"mc-list-patterns", no_argument,     0, OPT_MC_LIST_PATTERNS},
   {"mc-load-patterns", required_argument, 0, OPT_MC_LOAD_PATTERNS},
@@ -652,6 +654,10 @@ main(int argc, char *argv[])
 
       case OPT_MC_GAMES_PER_LEVEL:
 	mc_games_per_level = atoi(gg_optarg);
+	break;
+
+      case OPT_MC_RAVE:
+	mc_rave_equiv = atoi(gg_optarg);
 	break;
 
       case OPT_MC_PATTERNS:
@@ -1583,6 +1589,7 @@ Experimental options:\n\
    --mirror-limit <n>      stop mirroring when n stones on board\n\n\
    --monte-carlo           enable Monte Carlo move generation (9x9 or smaller)\n\
    --mc-games-per-level <n> number of Monte Carlo simulations per level\n\
+   --mc-rave <k>           RAVE weight for Monte Carlo (default 1000, 0 = off)\n\
    --mc-list-patterns      list names of builtin Monte Carlo patterns\n\
    --mc-patterns <name>    choose a built in Monte Carlo pattern database\n\
    --mc-load-patterns <filename> read Monte Carlo patterns from file\n\

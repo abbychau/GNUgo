@@ -1769,7 +1769,21 @@ struct uct_node {
   struct uct_arc *child;
   struct bitboard untested;
   Hash_data boardhash;
+  /* All-moves-as-first statistics (wins, games) for the moves of the
+   * player to move here, indexed by uct_amaf_index(); NULL without
+   * RAVE or when the pool is exhausted.
+   */
+  unsigned int *amaf;
 };
+
+/* Memory for AMAF tables, shared by the nodes of one search. */
+#define UCT_AMAF_POOL_BYTES (24 * 1024 * 1024)
+
+static int
+uct_amaf_index(int pos)
+{
+  return I(pos) * board_size + J(pos);
+}
 
 struct uct_tree {
   struct uct_node *nodes;
@@ -1787,6 +1801,9 @@ struct uct_tree {
   int move_ordering[BOARDSIZE];
   int inverse_move_ordering[BOARDSIZE];
   int num_ordered_moves;
+  unsigned int *amaf_pool;
+  int amaf_tables;
+  int amaf_used;
 };
 
 
@@ -1801,6 +1818,10 @@ uct_init_node(struct uct_tree *tree, int *allowed_moves)
   node->sum_scores = 0.0;
   node->sum_scores2 = 0.0;
   node->child = NULL;
+  node->amaf = NULL;
+  if (tree->amaf_used < tree->amaf_tables)
+    node->amaf = tree->amaf_pool
+                 + 2 * board_size * board_size * tree->amaf_used++;
   memset(node->untested.bits, 0, sizeof(node->untested.bits));
   for (pos = BOARDMIN; pos < BOARDMAX; pos++) {
     if (tree->game.mc.board[pos] == EMPTY
@@ -1914,6 +1935,138 @@ uct_finish_and_score_game(struct mc_game *game)
   return komi + mc_play_random_game(game);
 }
 
+/* Is pos a proper small eye of the player to move, which the search
+ * should not fill?
+ */
+static int
+uct_is_proper_small_eye(struct mc_board *mc, int pos, int color)
+{
+  int r;
+  int diagonal_value = 0;
+  for (r = 0; r < 4; r++)
+    if (mc->board[pos + delta[r]] == EMPTY
+        || mc->board[pos + delta[r]] == OTHER_COLOR(color))
+      return 0;
+
+  for (r = 4; r < 8; r++) {
+    int pos2 = pos + delta[r];
+    if (!MC_ON_BOARD(pos2))
+      diagonal_value++;
+    else if (mc->board[pos2] == OTHER_COLOR(color))
+      diagonal_value += 2;
+  }
+  return diagonal_value <= 3;
+}
+
+/* Move selection with RAVE (rapid action value estimation): the value
+ * of a move mixes its own win rate with its all-moves-as-first win
+ * rate, the share of simulations through this node won by the player
+ * to move when that player played the move at any later point. The
+ * AMAF estimate dominates while a move has few simulations of its own,
+ * with weight beta = sqrt(k / (3n + k)) for n own simulations and
+ * k = mc_rave_equiv. Untried moves are valued by AMAF alone, so
+ * promising moves are tried first instead of in a fixed order.
+ */
+static struct uct_node *
+uct_play_move_rave(struct uct_tree *tree, struct uct_node *node,
+                   float *gamma, int *move)
+{
+  struct uct_arc *arc_at[BOARDMAX];
+  struct uct_arc *arc;
+  struct mc_board *mc = &tree->game.mc;
+  int color = tree->game.color_to_move;
+  float k = (float) mc_rave_equiv;
+  float log_parent = log((float) node->games + 1.0);
+  int pos;
+
+  memset(arc_at, 0, sizeof(arc_at));
+  for (arc = node->child; arc; arc = arc->next)
+    if (arc->move != PASS_MOVE)
+      arc_at[arc->move] = arc;
+  *gamma = 0.0;
+
+  while (1) {
+    int best = NO_MOVE;
+    float best_value = -1.0;
+
+    for (pos = BOARDMIN; pos < BOARDMAX; pos++) {
+      int n = 0;
+      int an;
+      float value;
+      float amaf_rate;
+      int untested = node->untested.bits[pos / 32] & (1 << (pos % 32));
+      if (!arc_at[pos] && !untested)
+        continue;
+      an = node->amaf[2 * uct_amaf_index(pos) + 1];
+      amaf_rate = an ? (float) node->amaf[2 * uct_amaf_index(pos)] / an
+                     : 0.5;
+      value = amaf_rate;
+      if (arc_at[pos]) {
+        struct uct_node *child = arc_at[pos]->node;
+        n = child->games;
+        if (n > 0) {
+          float beta = sqrt(k / (3 * n + k));
+          value = (1 - beta) * child->wins / n + beta * amaf_rate;
+        }
+      }
+      value += 0.1 * sqrt(log_parent / (n + 1));
+      if (value > best_value) {
+        best_value = value;
+        best = pos;
+      }
+    }
+
+    if (best == NO_MOVE)
+      break;
+
+    if (arc_at[best]) {
+      struct uct_node *child = arc_at[best]->node;
+      if (child->games > 0)
+        *gamma = (float) child->wins / child->games;
+      *move = best;
+      mc_play_random_move(&tree->game, best);
+      return child;
+    }
+
+    /* An untried move: try it unless it fills our own eye or is
+     * illegal; then it is dropped and we choose again.
+     */
+    node->untested.bits[best / 32] &= ~(1 << (best % 32));
+    if (!uct_is_proper_small_eye(mc, best, color)
+        && mc_play_random_move(&tree->game, best)) {
+      *move = best;
+      return uct_find_node(tree, node, best);
+    }
+  }
+
+  mc_play_random_move(&tree->game, PASS_MOVE);
+  *move = PASS_MOVE;
+  return uct_find_node(tree, node, PASS_MOVE);
+}
+
+/* After a simulation, credit the moves that the player to move at this
+ * node played later in the game (the first play at each point only).
+ */
+static void
+uct_update_amaf(struct uct_tree *tree, struct uct_node *node, int depth,
+                int color, float result)
+{
+  unsigned char seen[BOARDMAX];
+  unsigned int win = ((result > 0) == (color == WHITE));
+  int k;
+  memset(seen, 0, sizeof(seen));
+  for (k = depth; k < tree->game.depth; k++) {
+    int pos = tree->game.move_history[k];
+    if (pos == PASS_MOVE || seen[pos])
+      continue;
+    seen[pos] = 1;
+    if ((k - depth) % 2 == 0) {
+      node->amaf[2 * uct_amaf_index(pos)] += win;
+      node->amaf[2 * uct_amaf_index(pos) + 1]++;
+    }
+  }
+}
+
 static struct uct_node *
 uct_play_move(struct uct_tree *tree, struct uct_node *node, float alpha,
 	      float *gamma, int *move)
@@ -1924,6 +2077,9 @@ uct_play_move(struct uct_tree *tree, struct uct_node *node, float alpha,
   struct uct_arc *best_winrate_arc = NULL;
   float best_uct_value = 0.0;
   float best_winrate = 0.0;
+
+  if (node->amaf)
+    return uct_play_move_rave(tree, node, gamma, move);
   
   for (child_arc = node->child; child_arc; child_arc = child_arc->next) {
     struct uct_node *child_node = child_arc->node;
@@ -2011,6 +2167,7 @@ uct_traverse_tree(struct uct_tree *tree, struct uct_node *node,
 {
   int color = tree->game.color_to_move;
   int num_passes = tree->game.consecutive_passes;
+  int depth = tree->game.depth;
   float result;
   float gamma;
   int move = PASS_MOVE;
@@ -2038,6 +2195,8 @@ uct_traverse_tree(struct uct_tree *tree, struct uct_node *node,
 
   node->sum_scores += result;
   node->sum_scores2 += result * result;
+  if (node->amaf)
+    uct_update_amaf(tree, node, depth, color, result);
   
   return result;
 }
@@ -2121,6 +2280,7 @@ uct_genmove(int color, int *move, int *forbidden_moves, int *allowed_moves,
   struct uct_node *node;
   struct mc_game starting_position;
   int most_games;
+  int most_visits;
   struct uct_node *most_games_node;
   struct uct_arc *most_games_arc;
   int pos;
@@ -2154,6 +2314,17 @@ uct_genmove(int color, int *move, int *forbidden_moves, int *allowed_moves,
   tree.num_used_nodes = 0;
   tree.num_used_arcs = 0;
   tree.forbidden_moves = forbidden_moves;
+  tree.amaf_pool = NULL;
+  tree.amaf_tables = 0;
+  tree.amaf_used = 0;
+  if (mc_rave_equiv > 0) {
+    int table_bytes = 2 * board_size * board_size * sizeof(unsigned int);
+    tree.amaf_tables = gg_min(nodes, UCT_AMAF_POOL_BYTES / table_bytes);
+    tree.amaf_pool = calloc((size_t) tree.amaf_tables * 2 * board_size
+                            * board_size, sizeof(unsigned int));
+    if (!tree.amaf_pool)
+      tree.amaf_tables = 0;
+  }
   uct_init_node(&tree, allowed_moves);
   uct_init_move_ordering(&tree);
 
@@ -2171,12 +2342,20 @@ uct_genmove(int color, int *move, int *forbidden_moves, int *allowed_moves,
 
   /* Identify the best move on the top level. */
   best_score = 0.0;
+  most_visits = 0;
   *move = PASS_MOVE;
   for (arc = tree.nodes[0].child; arc; arc = arc->next) {
     node = arc->node;
     move_frequencies[arc->move] = node->games;
     move_values[arc->move] = (float) node->wins / node->games;
-    if (best_score * node->games < node->wins) {
+    if (mc_rave_equiv > 0) {
+      /* With RAVE, the most simulated move is the most reliable. */
+      if (node->games > most_visits) {
+        most_visits = node->games;
+        *move = arc->move;
+      }
+    }
+    else if (best_score * node->games < node->wins) {
       *move = arc->move;
       best_score = (float) node->wins / node->games;
     }
@@ -2251,6 +2430,7 @@ uct_genmove(int color, int *move, int *forbidden_moves, int *allowed_moves,
   free(tree.arcs);
   free(tree.hashtable_odd);
   free(tree.hashtable_even);
+  free(tree.amaf_pool);
 }
 
 

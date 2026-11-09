@@ -130,6 +130,9 @@ int gtp_version         = 2;    /* Use GTP version 2 by default. */
 int use_monte_carlo_genmove = 0; /* Default is not to use Monte Carlo move
 				  * generation.
 				  */
+int mc_rave_equiv = 1000;       /* RAVE equivalence parameter; 0 turns RAVE
+				 * off (plain UCT, as in GNU Go 3.8).
+				 */
 int mc_games_per_level = 8000;  /* By default, use 8000 times the current
 				 * level number of simulations
 				 * for each mmove when Monte Carlo

@@ -1,5 +1,10 @@
 New in 3.8.2 (unreleased)
 
+- Monte Carlo mode (--monte-carlo) uses RAVE in its UCT search. On 9x9 it
+  won 81 of 100 games against the 3.8 search (+252 Elo, 95% interval
+  +163 to +336) and +127 Elo with playouts cut to equal time.
+  --mc-rave 0 restores the 3.8 search.
+
 - Windows: the program is linked with an 8 MB stack, like on Linux and
   macOS; the 1 MB default overflowed in some 19x19 positions (also in 3.8)
 - tests/tools/match.py plays matches between two engines and reports the
