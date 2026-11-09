@@ -1,3 +1,10 @@
+New in 3.8.2 (unreleased)
+
+- Windows: the program is linked with an 8 MB stack, like on Linux and
+  macOS; the 1 MB default overflowed in some 19x19 positions (also in 3.8)
+- tests/tools/match.py plays matches between two engines and reports the
+  win rate and Elo difference, with an interval computed over game pairs
+
 New in 3.8.1 (since 3.8)
 
 Engine

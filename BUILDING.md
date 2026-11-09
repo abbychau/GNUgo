@@ -145,6 +145,11 @@ After a change that improves results, record the new counts with
 reports the first move where they differ; CI uses it to check that the
 native and WebAssembly builds play identically.
 
+`tests/tools/match.py` measures playing strength: it plays an engine
+against a reference (usually unmodified GNU Go 3.8, commit `2910f75`)
+and reports the win rate and Elo difference with a 95% interval. See
+`tests/README` for how to build the reference.
+
 ## Manual
 
 ```sh

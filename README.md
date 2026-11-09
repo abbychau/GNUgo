@@ -122,7 +122,7 @@ builds choose identical moves. See [tests/README](tests/README).
 | `pages/` | Extra pages of the GitHub Pages site |
 | `wasm/` | Browser files: Web Worker, JavaScript API, TypeScript types, demo page, npm metadata |
 | `tests/` | Regression suites (`.tst`), their game records, `run_tests.py` and `baseline.json` |
-| `tests/tools/` | Native-vs-WebAssembly move comparison and the WebAssembly smoke test |
+| `tests/tools/` | Strength matches between engines, native-vs-WebAssembly move comparison, WebAssembly smoke test |
 | `doc/` | Texinfo manual, man page, and the original project's AUTHORS, THANKS, TODO and ChangeLog |
 | `contrib/` | Emacs mode, board images, a Perl module, GTP examples, and the original regression tools (`contrib/regress/`) |
 | `.github/workflows/` | CI, GitHub Pages and releases |

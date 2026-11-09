@@ -24,9 +24,38 @@ Files
   baseline.json   pass / known-fail counts of the main suites; CTest and
                   --baseline fail if a suite does worse. Update it with
                   --key --update-baseline after an improvement.
-  tools/          compare_engines.py (do two builds play the same
+  tools/          match.py (strength match between two engines),
+                  compare_engines.py (do two builds play the same
                   moves?) and wasm_smoke.cjs (WebAssembly module test)
   benchmark/      GTP game logs against other programs
 
 The original shell, awk, Perl and Pike regression tools (regress.sh,
 eval.sh, regress.pike, view.pike, ...) are in ../contrib/regress.
+
+Measuring playing strength
+
+Passing more test cases does not mean playing better, so engine changes
+should also be checked with games. tools/match.py plays an engine under
+test against a reference engine over GTP, alternating colours, and prints
+the win rate with a 95% interval and the Elo difference:
+
+  python tools/match.py ../build/src/interface/gnugo REF-GNUGO -n 200 -j8
+  python tools/match.py A B --size 19 --level 8 --sgf-dir games-out
+  python tools/match.py A B --args-a "--monte-carlo" --json result.json
+
+The natural reference is the unmodified GNU Go 3.8 engine, which is
+commit 2910f75 ("modernize init") of this repository:
+
+  git worktree add ../gnugo-3.8 2910f75
+  cmake -S ../gnugo-3.8 -B ../gnugo-3.8/build -DCMAKE_BUILD_TYPE=Release
+  cmake --build ../gnugo-3.8/build --config Release
+
+GNU Go is nearly deterministic, so each pair of games starts from a few
+random moves (--opening, default 4), played once with each colour
+assignment. When A and B play the same moves from that opening, the pair
+splits 1-1 whatever their strength, so the interval is computed over
+pairs and the summary reports how many pairs were decisive: that, not
+the game count, is the real sample size. (3.8.1 against 3.8 on 9x9:
+3 decisive pairs out of 100, +3 Elo, 95% CI -10 to +18.) A 9x9 game takes
+about a second at level 10, a 19x19 game about a minute and a half. Telling a 50 Elo
+difference apart needs several hundred games.

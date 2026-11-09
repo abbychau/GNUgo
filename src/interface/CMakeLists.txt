@@ -19,6 +19,14 @@ ADD_EXECUTABLE(gnugo ${gnugo_SRCS})
 
 IF(WIN32)
     SET(PLATFORM_LIBRARIES wsock32)
+    # The reading code recurses deeply; the 1 MB default stack on Windows
+    # overflows in some 19x19 positions (stock 3.8 too). Use 8 MB, as on
+    # Linux and macOS.
+    IF(MSVC)
+        TARGET_LINK_OPTIONS(gnugo PRIVATE /STACK:8388608)
+    ELSE()
+        TARGET_LINK_OPTIONS(gnugo PRIVATE -Wl,--stack,8388608)
+    ENDIF()
 ENDIF(WIN32)
 
 IF(UNIX)
