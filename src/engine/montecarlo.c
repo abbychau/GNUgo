@@ -1827,7 +1827,7 @@ uct_init_node(struct uct_tree *tree, int *allowed_moves)
     if (tree->game.mc.board[pos] == EMPTY
 	&& !tree->forbidden_moves[pos]
 	&& (!allowed_moves || allowed_moves[pos])) {
-      node->untested.bits[pos / 32] |= 1 << pos % 32;
+      node->untested.bits[pos / 32] |= 1U << pos % 32;
     }
   }
   node->boardhash = tree->game.mc.hash;
@@ -1994,7 +1994,7 @@ uct_play_move_rave(struct uct_tree *tree, struct uct_node *node,
       int an;
       float value;
       float amaf_rate;
-      int untested = node->untested.bits[pos / 32] & (1 << (pos % 32));
+      int untested = (node->untested.bits[pos / 32] & (1U << (pos % 32))) != 0;
       if (!arc_at[pos] && !untested)
         continue;
       an = node->amaf[2 * uct_amaf_index(pos) + 1];
@@ -2031,7 +2031,7 @@ uct_play_move_rave(struct uct_tree *tree, struct uct_node *node,
     /* An untried move: try it unless it fills our own eye or is
      * illegal; then it is dropped and we choose again.
      */
-    node->untested.bits[best / 32] &= ~(1 << (best % 32));
+    node->untested.bits[best / 32] &= ~(1U << (best % 32));
     if (!uct_is_proper_small_eye(mc, best, color)
         && mc_play_random_move(&tree->game, best)) {
       *move = best;
@@ -2115,12 +2115,12 @@ uct_play_move(struct uct_tree *tree, struct uct_node *node, float alpha,
       else
 	pos = tree->move_ordering[k];
       
-      if (node->untested.bits[pos / 32] & (1 << (pos % 32))) {
+      if (node->untested.bits[pos / 32] & (1U << (pos % 32))) {
 	int r;
 	int proper_small_eye = 1;
 	struct mc_board *mc = &tree->game.mc;
 	*move = pos;
-	node->untested.bits[*move / 32] &= ~(1 << *move % 32);
+	node->untested.bits[*move / 32] &= ~(1U << *move % 32);
 
 	for (r = 0; r < 4; r++) {
 	  if (mc->board[pos + delta[r]] == EMPTY
