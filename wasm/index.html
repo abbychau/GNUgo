@@ -3,30 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GNU Go WebAssembly</title>
+<title>GNU Go in the browser</title>
+<meta name="description" content="Play Go against GNU Go in your browser. The whole engine runs locally as WebAssembly; on 9x9 it uses Monte Carlo tree search with RAVE.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="GNU Go in the browser">
+<meta property="og:description" content="Play Go against GNU Go. The whole engine runs locally as WebAssembly, with Monte Carlo search on 9x9.">
+<meta property="og:url" content="https://abbychau.github.io/GNUgo/">
+<meta property="og:image" content="https://abbychau.github.io/GNUgo/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23dcb35c'/%3E%3Cpath d='M16 3v26M3 16h26' stroke='%233a2c12' stroke-width='1.5'/%3E%3Ccircle cx='10.5' cy='10.5' r='6.5' fill='%23111'/%3E%3Ccircle cx='21.5' cy='21.5' r='6.5' fill='%23fff' stroke='%23777' stroke-width='.8'/%3E%3C/svg%3E">
 <style>
   :root {
     --bg: #f4f1ea; --fg: #222; --muted: #6b6558; --panel: #fffdf8; --border: #d8d1c2;
-    --wood: #dcb35c; --line: #3a2c12; --accent: #2f6f4e;
+    --wood: #dcb35c; --line: #3a2c12; --accent: #2f6f4e; --code: #ece6d8;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #17181a; --fg: #e8e6e1; --muted: #9a958a; --panel: #212226; --border: #34363b;
-            --wood: #c79e4e; --line: #2a1f0c; --accent: #5fb38a; }
+            --wood: #c79e4e; --line: #2a1f0c; --accent: #5fb38a; --code: #2b2c31; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
          font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 980px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 20px;
+  a { color: var(--accent); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+
+  header { border-bottom: 1px solid var(--border); background: var(--panel); }
+  header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding-top: 12px; padding-bottom: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--fg);
+           text-decoration: none; }
+  .brand svg { width: 26px; height: 26px; flex: none; }
+  nav { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; }
+  nav a { text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  nav a[aria-current] { color: var(--fg); font-weight: 600; }
+
+  main { display: grid; gap: 20px; padding-top: 20px; padding-bottom: 8px;
          grid-template-columns: minmax(0, 1fr) 280px; align-items: start; }
   @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
   h1 { font-size: 20px; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
-  .sub a { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0 0 14px; font-size: 13px; }
   #board { width: 100%; aspect-ratio: 1; display: block; border-radius: 6px; cursor: pointer;
            box-shadow: 0 2px 10px rgba(0,0,0,.18); touch-action: manipulation; }
+
   aside { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
           display: grid; gap: 12px; }
   label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  label.check { display: flex; align-items: center; gap: 8px; color: var(--fg); }
   select, button { font: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border);
                    background: var(--bg); color: var(--fg); }
   button { cursor: pointer; }
@@ -34,33 +58,80 @@
   button:disabled { opacity: .5; cursor: default; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .split { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-  #status { font-weight: 600; min-height: 1.4em; }
-  #info { font-size: 13px; color: var(--muted); min-height: 1.2em; margin-top: -8px; }
+  #status { font-weight: 600; min-height: 1.4em; display: flex; align-items: center; gap: 8px; }
+  #status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none;
+                 animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; transform: scale(.7); } }
+  @media (prefers-reduced-motion: reduce) { #status .dot { animation: none; } }
+  .meta { display: grid; gap: 6px; font-size: 13px; color: var(--muted); margin-top: -4px; }
+  .engine { justify-self: start; font-size: 12px; font-weight: 600; color: var(--accent);
+            border: 1px solid var(--accent); border-radius: 999px; padding: 1px 9px; }
+  .counts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-variant-numeric: tabular-nums; }
+  .stone { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 3px; }
+  .stone.b { background: #111; border: 1px solid #777; }
+  .stone.w { background: #fff; border: 1px solid #999; }
+  #info { font-size: 13px; color: var(--muted); min-height: 1.2em; margin-top: -6px; }
   input[type=file] { display: none; }
-  #log { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--muted); max-height: 180px;
+  #log { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--muted); max-height: 160px;
          overflow: auto; white-space: pre-wrap; margin: 0; border-top: 1px solid var(--border); padding-top: 8px; }
+
+  .about { padding-top: 28px; padding-bottom: 56px; }
+  .about h2 { font-size: 19px; margin: 28px 0 8px; }
+  .about h2:first-child { margin-top: 0; }
+  .about p { margin: 8px 0; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .table { overflow-x: auto; margin: 12px 0; border: 1px solid var(--border); background: var(--panel); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-top: 1px solid var(--border); }
+  thead th { border-top: 0; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+  tbody th { white-space: nowrap; }
+  code { font: 0.92em ui-monospace, Consolas, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  pre.code { font: 13px/1.5 ui-monospace, Consolas, monospace; background: var(--panel); border: 1px solid var(--border);
+             border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 10px 0; }
+  footer { border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+  footer .wrap { padding-top: 14px; padding-bottom: 24px; }
 </style>
 </head>
 <body>
-<main>
+<header>
+  <div class="wrap">
+    <a class="brand" href="https://abbychau.github.io/GNUgo/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#dcb35c"/><path d="M16 3v26M3 16h26" stroke="#3a2c12" stroke-width="1.5"/><circle cx="10.5" cy="10.5" r="6.5" fill="#111"/><circle cx="21.5" cy="21.5" r="6.5" fill="#fff" stroke="#777" stroke-width=".8"/></svg>
+      GNU Go
+    </a>
+    <nav aria-label="Site">
+      <a href="https://abbychau.github.io/GNUgo/" aria-current="page">Play</a>
+      <a href="https://abbychau.github.io/GNUgo/differences.html">What's different from 3.8</a>
+      <a href="https://abbychau.github.io/GNUgo/mcts.html" hreflang="zh-Hant">MCTS and RAVE (中文)</a>
+      <a href="https://abbychau.github.io/GNUgo/manual/">Manual</a>
+      <a href="https://github.com/abbychau/GNUgo/releases/latest">Downloads</a>
+      <a href="https://github.com/abbychau/GNUgo">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
   <section>
-    <h1>GNU Go 3.8 — WebAssembly</h1>
-    <p class="sub">The engine runs entirely in your browser in a Web Worker. Your game is kept in this browser.
-      <a href="https://abbychau.github.io/GNUgo/differences.html">What's different from GNU Go 3.8</a> ·
-      <a href="https://abbychau.github.io/GNUgo/manual/">Manual</a> ·
-      <a href="https://github.com/abbychau/GNUgo">Source</a></p>
+    <h1>Play Go against GNU Go</h1>
+    <p class="sub">The engine runs entirely in your browser. Nothing is sent to a server, and
+      your game is kept in this browser so you can come back to it.</p>
     <canvas id="board" width="760" height="760" aria-label="Go board"></canvas>
   </section>
   <aside>
     <div id="status">Loading engine…</div>
+    <div class="meta">
+      <span class="engine" id="engine" hidden></span>
+      <div class="counts" id="counts"></div>
+    </div>
     <div id="info"></div>
     <div class="row">
-      <label>Board <select id="size"><option>9</option><option>13</option><option selected>19</option></select></label>
+      <label>Board <select id="size"><option selected>9</option><option>13</option><option>19</option></select></label>
       <label>You play <select id="color"><option value="black">Black</option><option value="white">White</option></select></label>
     </div>
     <div class="row">
       <label>Level <select id="level"></select></label>
-      <label>Komi <select id="komi"><option>0.5</option><option>5.5</option><option selected>6.5</option><option>7.5</option></select></label>
+      <label>Komi <select id="komi"><option>0.5</option><option>5.5</option><option>6.5</option><option selected>7.5</option></select></label>
     </div>
     <div class="row">
       <label>Handicap <select id="handicap"><option value="0">None</option></select></label>
@@ -83,10 +154,72 @@
       <button id="save" disabled>Save SGF</button>
       <button id="load" disabled>Load SGF</button>
     </div>
+    <label class="check"><input type="checkbox" id="numbers"> Show move numbers</label>
     <input type="file" id="file" accept=".sgf,application/x-go-sgf">
     <pre id="log"></pre>
   </aside>
 </main>
+
+<section class="about wrap" aria-labelledby="about">
+  <h2 id="about">About this page</h2>
+  <div class="cols">
+    <p>GNU Go is the Go program of the GNU project, free software under the GPL. Its last
+    official release, 3.8, came out in 2009. This page runs a modernized version of it:
+    the whole engine, pattern databases included, is compiled to WebAssembly (about 1 MB
+    to download) and plays in a background thread of your browser, so the page stays
+    responsive while it thinks.</p>
+    <p>Click an intersection to play. <strong>Hint</strong> suggests three good moves
+    for you, <strong>Estimate</strong> gives the current score, and <strong>Score</strong>
+    ends the game and shows dead stones and territory. Games can be saved and loaded as SGF
+    files, and an unfinished game is restored when you return.</p>
+  </div>
+
+  <h2>How strong is it?</h2>
+  <p>GNU Go chooses its method by board size. On small boards it uses Monte Carlo tree
+  search: it plays thousands of quick random games from the current position and keeps
+  statistics on which moves win, helped by RAVE, which shares what each game teaches about a
+  move across the whole search. On larger boards it uses GNU Go's classic engine, built
+  from hand-written Go knowledge and tactical reading.</p>
+  <div class="table">
+    <table>
+      <thead><tr><th scope="col">Board</th><th scope="col">Engine</th><th scope="col">Measured</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">9×9</th><td>Monte Carlo tree search with RAVE</td><td>+177 Elo against the classic engine at level 10 (200 games); about 0.7 s per move at level 10</td></tr>
+        <tr><th scope="row">13×13, 19×19</th><td>Classic GNU Go 3.8 engine</td><td>Monte Carlo lost 39 of 40 games on 19×19, so large boards keep the classic engine</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>Level</strong> (0 to 10) trades strength for speed; on 9×9 each level adds 1,000
+  simulations per move. <strong>Time per move</strong> lowers the level automatically when
+  moves take too long, and <strong>Move now</strong> stops a long search. For the details and
+  the match results, see <a href="https://abbychau.github.io/GNUgo/differences.html#engine">what's
+  different from GNU Go 3.8</a>, or the article on
+  <a href="https://abbychau.github.io/GNUgo/mcts.html" hreflang="zh-Hant">MCTS, RAVE and AlphaGo's networks</a> (in Chinese).</p>
+
+  <h2>Use it in your own page</h2>
+  <p>The engine comes with a small JavaScript API that runs it in a Web Worker and answers
+  with promises. Download <code>gnugo-wasm.zip</code> from the
+  <a href="https://github.com/abbychau/GNUgo/releases/latest">latest release</a>, or install
+  <code>@abbychau/gnugo-wasm</code> from <a href="https://github.com/abbychau/GNUgo/packages">GitHub Packages</a>,
+  and serve the files over HTTP:</p>
+<pre class="code">import { GnuGo } from "./gnugo.js";
+
+const go = await GnuGo.create();
+await go.boardsize(9);
+await go.play("black", "E5");
+const reply = await go.genmove("white");   // e.g. "C4"
+const text = await go.command("estimate_score");   // any GTP command</pre>
+  <p>The <a href="https://github.com/abbychau/GNUgo/blob/master/wasm/README.md">API
+  reference</a> covers time limits, cancelling a search and SGF. For desktop use, the release
+  also has programs for Windows, Linux and macOS that work with any GTP client.</p>
+</section>
+
+<footer>
+  <div class="wrap">GNU Go is free software, licensed under the GNU General Public License,
+  version 3 or later. Based on GNU Go 3.8 by the GNU Go team;
+  <a href="https://github.com/abbychau/GNUgo">source on GitHub</a>.</div>
+</footer>
+
 <script type="module">
 import { GnuGo, toVertex, fromVertex } from "./gnugo.js";
 
@@ -95,23 +228,65 @@ const canvas = $("board"), ctx = canvas.getContext("2d");
 for (let i = 0; i <= 10; i++) $("level").add(new Option(i, i, false, i === 6));
 for (let i = 2; i <= 9; i++) $("handicap").add(new Option(i, i));
 
-const STORE = "gnugo-wasm-game";
-let go, size = 19, human = "black", busy = true, over = false;
-let stones = { black: [], white: [] }, last = null, passes = 0;
+const STORE = "gnugo-wasm-game", PREFS = "gnugo-wasm-prefs";
+let go, size = 9, human = "black", busy = true, over = false;
+let stones = { black: [], white: [] }, last = null, passes = 0, hover = null;
 let marks = { hints: [], dead: [], blackTerritory: [], whiteTerritory: [] };
 
 const other = (c) => (c === "black" ? "white" : "black");
 const log = (t) => { $("log").textContent += t + "\n"; $("log").scrollTop = 1e9; };
-const status = (t) => ($("status").textContent = t);
 const info = (t) => ($("info").textContent = t || "");
 const clearMarks = () => (marks = { hints: [], dead: [], blackTerritory: [], whiteTerritory: [] });
 const vertices = (s) => s.split(/\s+/).filter(Boolean);
+
+// Status line; with thinking = true it shows a pulsing dot and a timer.
+let timer = null;
+function status(text, thinking = false) {
+  clearInterval(timer); timer = null;
+  const el = $("status");
+  if (!thinking) { el.textContent = text; return; }
+  const t0 = performance.now();
+  el.innerHTML = '<span class="dot" aria-hidden="true"></span><span></span>';
+  const span = el.lastChild;
+  const tick = () => (span.textContent = `${text} ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  tick(); timer = setInterval(tick, 100);
+}
+
+// The engine picks Monte Carlo on 7x7 to 9x9 and the classic engine elsewhere.
+function showEngine() {
+  const mc = size >= 7 && size <= 9;
+  const el = $("engine");
+  el.hidden = false;
+  el.textContent = mc ? "Monte Carlo + RAVE" : "Classic engine";
+  el.title = mc ? "Monte Carlo tree search with RAVE, used on 9x9"
+                : "GNU Go's classic engine: patterns, reading and influence";
+}
+
+async function showCounts() {
+  const rec = go.gameRecord();
+  const [b, w] = [await go.captures("black"), await go.captures("white")];
+  $("counts").innerHTML =
+    `<span>Move ${rec.moves.length}</span>` +
+    `<span title="Stones captured by Black"><span class="stone b"></span>${b} captured</span>` +
+    `<span title="Stones captured by White"><span class="stone w"></span>${w} captured</span>`;
+}
 
 function setBusy(b) {
   busy = b;
   for (const id of ["new", "pass", "undo", "hint", "estimate", "score", "save", "load"]) $(id).disabled = b;
   if (over) for (const id of ["pass", "hint"]) $(id).disabled = true;
+  if (b && hover) { hover = null; draw(); }
 }
+
+/* ---- Preferences (kept in this browser) ---- */
+
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS)) || {}; } catch { return {}; }
+}
+function savePrefs() {
+  try { localStorage.setItem(PREFS, JSON.stringify({ numbers: $("numbers").checked })); } catch {}
+}
+$("numbers").checked = !!loadPrefs().numbers;
 
 /* ---- Drawing ---- */
 
@@ -134,19 +309,37 @@ function draw() {
     if (size === 9 && (x === 4) !== (y === 4)) continue;
     ctx.beginPath(); ctx.arc(step * (x + 1), step * (y + 1), step * 0.1, 0, 7); ctx.fill();
   }
+
+  // Move numbers: the latest move on each point is the stone that is there now.
+  const numbers = new Map();
+  if ($("numbers").checked && go) go.gameRecord().moves.forEach((m, i) => numbers.set(m.vertex, i + 1));
+
   const dead = new Set(marks.dead);
-  for (const color of ["black", "white"]) for (const v of stones[color]) {
-    const c = at(v); if (!c) continue;
+  const stone = (c, color, alpha) => {
     const g = ctx.createRadialGradient(c.x - r * .35, c.y - r * .35, r * .1, c.x, c.y, r);
     if (color === "black") { g.addColorStop(0, "#555"); g.addColorStop(1, "#111"); }
     else { g.addColorStop(0, "#fff"); g.addColorStop(1, "#cfcfcf"); }
-    ctx.globalAlpha = dead.has(v) ? 0.4 : 1;
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 7); ctx.fill();
     ctx.globalAlpha = 1;
-    if (v === last && !dead.has(v)) {
+  };
+  for (const color of ["black", "white"]) for (const v of stones[color]) {
+    const c = at(v); if (!c) continue;
+    stone(c, color, dead.has(v) ? 0.4 : 1);
+    if (dead.has(v)) continue;
+    const n = numbers.get(v);
+    if (n) {
+      ctx.fillStyle = v === last ? "#d2452f" : color === "black" ? "#fff" : "#111";
+      ctx.font = `${v === last ? "bold " : ""}${Math.round(step * (n < 100 ? 0.42 : 0.34))}px system-ui`;
+      ctx.fillText(String(n), c.x, c.y + 1);
+    } else if (v === last) {
       ctx.strokeStyle = color === "black" ? "#fff" : "#000"; ctx.lineWidth = Math.max(2, step * 0.06);
       ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.45, 0, 7); ctx.stroke();
     }
+  }
+  // Where your stone would go.
+  if (hover && !busy && !over && !stones.black.includes(hover) && !stones.white.includes(hover)) {
+    const c = at(hover); if (c) stone(c, human, 0.45);
   }
   // Territory after scoring: small squares in the owner's color.
   for (const [list, fill] of [[marks.blackTerritory, "#111"], [marks.whiteTerritory, "#fff"]]) {
@@ -167,6 +360,7 @@ async function refresh() {
   stones.black = await go.listStones("black");
   stones.white = await go.listStones("white");
   draw();
+  await showCounts();
   save();
 }
 
@@ -223,7 +417,7 @@ function toMove() {
 
 async function engineMove() {
   const color = other(human);
-  status("GNU Go is thinking…"); setBusy(true); clearMarks(); info();
+  status("GNU Go is thinking…", true); setBusy(true); clearMarks(); info();
   const t = performance.now();
   $("stop").hidden = false; $("stop").disabled = false;
   let mv;
@@ -232,7 +426,7 @@ async function engineMove() {
   } catch (e) {
     if (!e.cancelled) throw e;
     // "Move now": the long search was aborted; play a quick level-0 move.
-    status("GNU Go is moving quickly…");
+    status("GNU Go is moving quickly…", true);
     await go.level(0);
     mv = await go.genmove(color);
     await go.level($("level").value);
@@ -260,7 +454,7 @@ async function humanMove(vertex) {
 }
 
 async function score() {
-  setBusy(true); status("Scoring…"); clearMarks();
+  setBusy(true); status("Scoring…", true); clearMarks();
   const s = await go.finalScore();
   marks.dead = await go.deadStones();
   marks.blackTerritory = vertices(await go.command("final_status_list black_territory"));
@@ -279,6 +473,7 @@ async function newGame() {
   await go.komi($("komi").value); await go.level($("level").value);
   await go.timePerMove(Number($("time").value));
   if (handicap >= 2) await go.fixedHandicap(handicap);
+  showEngine();
   $("log").textContent = "";
   log(`new game ${size}x${size}${handicap >= 2 ? `, handicap ${handicap}` : ""}, you are ${human}`);
   await refresh();
@@ -288,14 +483,24 @@ async function newGame() {
 
 /* ---- Controls ---- */
 
-canvas.addEventListener("click", (ev) => {
-  if (busy || over) return;
+function pointAt(ev) {
   const rect = canvas.getBoundingClientRect(), step = rect.width / (size + 1);
   const x = Math.round((ev.clientX - rect.left) / step) - 1, y = Math.round((ev.clientY - rect.top) / step) - 1;
-  if (x < 0 || y < 0 || x >= size || y >= size) return;
+  return x < 0 || y < 0 || x >= size || y >= size ? null : toVertex(x, y, size);
+}
+canvas.addEventListener("click", (ev) => {
+  if (busy || over) return;
+  const v = pointAt(ev); if (!v) return;
+  hover = null;
   setBusy(true);
-  humanMove(toVertex(x, y, size));
+  humanMove(v);
 });
+canvas.addEventListener("pointermove", (ev) => {
+  if (ev.pointerType !== "mouse") return;   // no hover on touch screens
+  const v = busy || over ? null : pointAt(ev);
+  if (v !== hover) { hover = v; draw(); }
+});
+canvas.addEventListener("pointerleave", () => { if (hover) { hover = null; draw(); } });
 $("new").onclick = newGame;
 $("pass").onclick = () => { if (!busy && !over) { setBusy(true); humanMove("pass"); } };
 $("undo").onclick = async () => {
@@ -312,7 +517,7 @@ $("undo").onclick = async () => {
   last = null; await refresh(); status("Your move."); setBusy(false);
 };
 $("hint").onclick = async () => {
-  setBusy(true); status("Looking for good moves…");
+  setBusy(true); status("Looking for good moves…", true);
   const top = (await go.topMoves(human)).slice(0, 3);
   marks.hints = top.map((m) => m.vertex);
   info(top.length ? "Hints: " + top.map((m, i) => `${i + 1}. ${m.vertex} (${m.value.toFixed(1)})`).join("  ") : "No suggestion.");
@@ -321,7 +526,7 @@ $("hint").onclick = async () => {
 $("estimate").onclick = async () => {
   setBusy(true);
   const before = $("status").textContent;
-  status("Estimating…");
+  status("Estimating…", true);
   const s = await go.estimateScore();
   info(`Estimate: ${s.split(" ")[0]}`);
   status(before); setBusy(false);
@@ -342,6 +547,7 @@ $("file").onchange = async () => {
     const next = await go.loadSgf(await f.text());
     size = go.gameRecord().size; $("size").value = String(size);
     human = next; $("color").value = human;
+    showEngine();
     log(`loaded ${f.name}: ${size}x${size}, ${next} to move; you play ${human}`);
     status("Your move.");
   } catch (e) {
@@ -352,6 +558,9 @@ $("file").onchange = async () => {
 $("stop").onclick = () => { $("stop").disabled = true; go.cancel(); };
 $("level").onchange = () => { if (!busy) { go.level($("level").value); save(); } };
 $("time").onchange = () => { if (!busy) { go.timePerMove(Number($("time").value)); save(); } };
+// Suggest the usual komi for the board size chosen for the next game.
+$("size").onchange = () => { $("komi").value = $("size").value === "9" ? "7.5" : "6.5"; };
+$("numbers").onchange = () => { savePrefs(); draw(); };
 $("score").onclick = score;
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 
@@ -360,6 +569,7 @@ try {
   go = await GnuGo.create();
   log(`GNU Go ${await go.version()} ready`);
   if (await restore()) {
+    showEngine();
     await refresh();
     if (toMove() !== human) await engineMove();
     else { status("Your move."); setBusy(false); }
