@@ -555,7 +555,7 @@ do_genmove(int color, float pure_threat_value,
    * FIXME: Identifying fuseki moves by checking the move value is
    * very ugly and fragile.
    */
-  if (use_monte_carlo_genmove && move != PASS_MOVE
+  if (monte_carlo_enabled() && move != PASS_MOVE
       && (*value < 75.0 || *value > 75.01) && !doing_scoring) {
     int allowed_moves2[BOARDMAX];
     int num_allowed_moves2 = 0;

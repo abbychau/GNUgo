@@ -61,6 +61,23 @@ init_gnugo(float memory, unsigned int seed)
 
 /* ---------------------------------------------------------------- */
 
+/* Whether genmove uses Monte Carlo move generation on the current
+ * board: always with --monte-carlo, never with --no-monte-carlo, and
+ * by default (MC_AUTO) on 7x7 to 9x9 boards, where it is clearly
+ * stronger than the classic move generator (matches against
+ * --no-monte-carlo: +323 Elo on 9x9 at 8000 games per level, +177 at
+ * 1000, +241 on 7x7). On 5x5 the two play equally, and on the tiny
+ * boards the classic engine is tuned for Japanese scoring, which the
+ * area-scoring playouts do not see, so they keep the classic engine.
+ */
+int monte_carlo_enabled(void)
+{
+  if (use_monte_carlo_genmove == MC_AUTO)
+    return board_size >= 7 && board_size <= 9;
+  return use_monte_carlo_genmove == MC_ON;
+}
+
+
 /* Check whether we can accept a certain boardsize. Set out to NULL to
  * suppress informative messages. Return 1 for an acceptable
  * boardsize, 0 otherwise.
@@ -68,7 +85,7 @@ init_gnugo(float memory, unsigned int seed)
 int check_boardsize(int boardsize, FILE *out)
 {
   int max_board = MAX_BOARD;
-  if (use_monte_carlo_genmove && max_board > 9)
+  if (use_monte_carlo_genmove == MC_ON && max_board > 9)
     max_board = 9;
   
   if (boardsize < MIN_BOARD || boardsize > max_board) {

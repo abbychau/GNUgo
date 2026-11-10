@@ -99,9 +99,11 @@ loadsgf games/endgame4.sgf
 #? [C4]
 
 # The basic 2/3 pt ko capture is undervalued.
+# Monte Carlo move generation (the default on 7x7 to 9x9 since 3.8.2)
+# plays G7; the classic engine (--no-monte-carlo) passes.
 loadsgf games/endgame5.sgf
 501 reg_genmove black
-#? [E5]
+#? [E5]*
 
 # An endgame sente pattern.
 loadsgf games/endgame6.sgf 1

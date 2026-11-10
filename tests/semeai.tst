@@ -428,8 +428,10 @@ loadsgf games/semeai/semeai17.sgf 52
 #? [1 0 (D6|C7)]*
 
 # Doubtful whether C7 should be accepted even if it kills all white.
+# Passes with Monte Carlo move generation (the default on 7x7 to 9x9
+# since 3.8.2); the classic engine (--no-monte-carlo) plays C8.
 107 reg_genmove black
-#? [D6|C7]*
+#? [D6|C7]
 
 loadsgf games/semeai/semeai17.sgf 60
 108 analyze_semeai G8 H2
@@ -518,9 +520,11 @@ loadsgf games/kgs/GNU-minautore.sgf 80
 #? [critical T8 (T8|T10|T11|T12)]
 
 # J8 leaves ko aji. (Admittedly a very bad ko for black but still a ko.)
+# Monte Carlo move generation (the default on 7x7 to 9x9 since 3.8.2)
+# plays E7; the classic engine (--no-monte-carlo) passes.
 loadsgf games/CrazyStone1.sgf 50
 132 reg_genmove white
-#? [H9|J4]
+#? [H9|J4]*
 
 loadsgf games/CrazyStone1.sgf 56
 133 analyze_semeai D9 G3

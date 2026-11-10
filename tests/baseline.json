@@ -30,8 +30,8 @@
   "endgame.tst": {
     "fail": 0,
     "ignore": 0,
-    "known_fail": 14,
-    "pass": 50,
+    "known_fail": 15,
+    "pass": 49,
     "unexpected_pass": 0
   },
   "owl.tst": {

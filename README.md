@@ -91,7 +91,7 @@ Run `gnugo --help` or `man gnugo` for the full list.
 | `-l FILE`, `-L MOVE` | Load an SGF file, stopping before move MOVE (a number or a point). |
 | `-o FILE` | Write the game to an SGF file. |
 | `--printsgf FILE` | Write a diagram of the position (useful with `-l` and `-L`). |
-| `--monte-carlo` | Experimental Monte Carlo move generation (9x9 or smaller). |
+| `--monte-carlo`, `--no-monte-carlo` | Monte Carlo move generation is used by default on 7x7 to 9x9 boards and the classic engine elsewhere; force it on (9x9 or smaller only) or off. |
 | `--quiet` | Don't print the copyright and other messages. |
 
 ## Tests

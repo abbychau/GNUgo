@@ -127,16 +127,19 @@ int play_mirror_go      = 0;    /* try to play mirror go if possible */
 int mirror_stones_limit = -1;   /* but stop at this number of stones */
 
 int gtp_version         = 2;    /* Use GTP version 2 by default. */
-int use_monte_carlo_genmove = 0; /* Default is not to use Monte Carlo move
-				  * generation.
-				  */
+int use_monte_carlo_genmove = MC_AUTO; /* Monte Carlo move generation:
+					* MC_OFF, MC_ON (9x9 or smaller
+					* only) or MC_AUTO (on for 7x7 to
+					* 9x9 boards, off for others).
+					*/
 int mc_rave_equiv = 1000;       /* RAVE equivalence parameter; 0 turns RAVE
 				 * off (plain UCT, as in GNU Go 3.8).
 				 */
-int mc_games_per_level = 8000;  /* By default, use 8000 times the current
+int mc_games_per_level = 1000;  /* By default, use 1000 times the current
 				 * level number of simulations
-				 * for each mmove when Monte Carlo
-				 * move generation is enabled.
+				 * for each move when Monte Carlo
+				 * move generation is enabled
+				 * (8000 in GNU Go 3.8).
 				 */
 
 float best_move_values[10];

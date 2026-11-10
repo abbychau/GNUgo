@@ -220,6 +220,10 @@ extern int play_mirror_go;           /* try to play mirror go if possible */
 extern int mirror_stones_limit;      /* but stop at this number of stones */
 extern int gtp_version;              /* version of Go Text Protocol */
 extern int use_monte_carlo_genmove;  /* use Monte Carlo move generation */
+#define MC_OFF  0                    /* values of use_monte_carlo_genmove */
+#define MC_ON   1
+#define MC_AUTO 2
+int monte_carlo_enabled(void);       /* Monte Carlo for the current board? */
 extern int mc_games_per_level;       /* number of Monte Carlo simulations per level */
 extern int mc_rave_equiv;            /* RAVE equivalence parameter, 0 = no RAVE */
 

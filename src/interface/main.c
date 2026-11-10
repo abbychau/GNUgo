@@ -159,6 +159,7 @@ enum {OPT_BOARDSIZE = 127,
       OPT_RESIGN_ALLOWED,
       OPT_NEVER_RESIGN,
       OPT_MONTE_CARLO,
+      OPT_NO_MONTE_CARLO,
       OPT_MC_GAMES_PER_LEVEL,
       OPT_MC_RAVE,
       OPT_MC_PATTERNS,
@@ -312,6 +313,7 @@ static struct gg_option const long_options[] =
   {"resign-allowed", no_argument,       0, OPT_RESIGN_ALLOWED},
   {"never-resign",   no_argument,       0, OPT_NEVER_RESIGN},
   {"monte-carlo",    no_argument,       0, OPT_MONTE_CARLO},
+  {"no-monte-carlo", no_argument,       0, OPT_NO_MONTE_CARLO},
   {"mc-games-per-level", required_argument, 0, OPT_MC_GAMES_PER_LEVEL},
   {"mc-rave",        required_argument, 0, OPT_MC_RAVE},
   {"mc-patterns",    required_argument, 0, OPT_MC_PATTERNS},
@@ -649,7 +651,11 @@ main(int argc, char *argv[])
 	break;
 
       case OPT_MONTE_CARLO:
-	use_monte_carlo_genmove = 1;
+	use_monte_carlo_genmove = MC_ON;
+	break;
+
+      case OPT_NO_MONTE_CARLO:
+	use_monte_carlo_genmove = MC_OFF;
 	break;
 
       case OPT_MC_GAMES_PER_LEVEL:
@@ -1587,8 +1593,10 @@ Experimental options:\n\
    --nojosekidb            turn off joseki database\n\
    --mirror                try to play mirror go\n\
    --mirror-limit <n>      stop mirroring when n stones on board\n\n\
-   --monte-carlo           enable Monte Carlo move generation (9x9 or smaller)\n\
-   --mc-games-per-level <n> number of Monte Carlo simulations per level\n\
+   --monte-carlo           always use Monte Carlo move generation (boards up\n\
+                           to 9x9 only; by default it is used on 7x7 to 9x9)\n\
+   --no-monte-carlo        never use Monte Carlo (the classic engine of 3.8)\n\
+   --mc-games-per-level <n> Monte Carlo simulations per level (default 1000)\n\
    --mc-rave <k>           RAVE weight for Monte Carlo (default 1000, 0 = off)\n\
    --mc-list-patterns      list names of builtin Monte Carlo patterns\n\
    --mc-patterns <name>    choose a built in Monte Carlo pattern database\n\

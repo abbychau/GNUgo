@@ -1,5 +1,11 @@
 New in 3.8.2 (unreleased)
 
+- Monte Carlo move generation with RAVE is the default on 7x7 to 9x9
+  boards, where it beats the classic engine (9x9, 200 games: +177 Elo at
+  level 10; 7x7: +241 Elo). Other boards keep the classic engine (on
+  19x19 Monte Carlo lost 39 of 40 games). --no-monte-carlo restores the
+  3.8 behavior; --mc-games-per-level now defaults to 1000 (was 8000), so
+  a 9x9 move takes about 0.6 s at level 10.
 - Monte Carlo mode (--monte-carlo) uses RAVE in its UCT search. On 9x9 it
   won 81 of 100 games against the 3.8 search (+252 Elo, 95% interval
   +163 to +336) and +127 Elo with playouts cut to equal time.

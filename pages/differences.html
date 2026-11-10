@@ -55,12 +55,14 @@
   <h1>How this repository differs from GNU&nbsp;Go&nbsp;3.8</h1>
   <p class="lead">GNU Go 3.8, released by the GNU project on 17 February 2009, is the last
   official release. This repository starts from the 3.8 sources and brings the build,
-  platforms and tests up to date. The engine is still GNU Go 3.8: the same pattern
-  databases, the same reading and the same GTP commands, with a few small fixes.</p>
+  platforms and tests up to date. The classic engine is still GNU Go 3.8: the same pattern
+  databases, the same reading and the same GTP commands, with a few small fixes. On small
+  boards (7x7 to 9x9) the program now uses an improved Monte Carlo search by default.</p>
 
   <div class="note">
-    <p><strong>In short:</strong> it plays like GNU Go 3.8 and still reports version
-    3.8. What changed is how you build, test and use it: CMake instead of autotools,
+    <p><strong>In short:</strong> on 13x13 and 19x19 it plays like GNU Go 3.8; on 9x9 it
+    is much stronger, because Monte Carlo search with RAVE is now the default there. It
+    still reports version 3.8. The rest is how you build, test and use it: CMake instead of autotools,
     ready-made programs for Windows, Linux and macOS, a WebAssembly build that runs in
     web pages, and automated tests on every change.</p>
   </div>
@@ -70,7 +72,7 @@
     <table>
       <thead><tr><th scope="col"></th><th scope="col">GNU Go 3.8</th><th scope="col">This repository</th></tr></thead>
       <tbody>
-        <tr><th scope="row">Engine</th><td>3.8</td><td>3.8 with a few small fixes (<a href="#engine">below</a>); identical results on the main regression suites</td></tr>
+        <tr><th scope="row">Engine</th><td>3.8</td><td>3.8 with a few small fixes (<a href="#engine">below</a>); on 7x7 to 9x9, Monte Carlo search with RAVE by default (+177 Elo on 9x9 against the classic engine)</td></tr>
         <tr><th scope="row">Build</th><td>autotools (<code>configure</code>, <code>make</code>), Visual Studio 6 projects, an optional CMake file for Windows</td><td>CMake only, on every platform, with presets</td></tr>
         <tr><th scope="row">Runs in</th><td>Unix, Windows (built yourself)</td><td>Windows, Linux, macOS, web browsers and Node.js</td></tr>
         <tr><th scope="row">Downloads</th><td>Source tarball</td><td>Programs for Windows x64, Linux x64, macOS (Apple silicon), a WebAssembly bundle and an npm package</td></tr>
@@ -83,8 +85,26 @@
 
   <h2 id="engine">Engine changes</h2>
   <p>Only these changes touch the engine. Everything else, including the pattern
-  databases, owl and tactical reading, influence, joseki and fuseki, the Monte Carlo
-  mode, the GTP commands and the command-line options, is as in 3.8.</p>
+  databases, owl and tactical reading, influence, joseki and fuseki and the GTP
+  commands, is as in 3.8.</p>
+
+  <h3>Monte Carlo search with RAVE, on by default on small boards</h3>
+  <p>GNU Go 3.8 has an experimental Monte Carlo mode (<code>--monte-carlo</code>, 9x9 or
+  smaller) that uses a plain UCT search. Its search now also keeps all-moves-as-first
+  statistics (RAVE), which tell it early which moves are promising. With RAVE the Monte
+  Carlo mode is clearly stronger than the classic engine on small boards, so it is now
+  used by default on 7x7 to 9x9. Other boards keep the classic engine: on 5x5 the two
+  play equally, and on 19x19 Monte Carlo lost 39 of 40 games. The number of simulations
+  per level went down from 8000 to 1000, so a move at level 10 takes about 0.6 seconds,
+  close to the classic engine.</p>
+  <p>New options: <code>--no-monte-carlo</code> uses the classic engine on every board,
+  as 3.8 did; <code>--mc-rave 0</code> turns RAVE off. <code>--monte-carlo</code> still
+  forces Monte Carlo and still limits the board to 9x9.</p>
+  <p class="effect">Effect, in 200-game matches on 9x9 against the classic engine at
+  level 10: +177 Elo at the new default, +323 Elo at 3.8's 8000 simulations per level
+  (+168 without RAVE); +241 Elo on 7x7. Two 9x9 regression tests that the classic engine
+  passes now fail and one that it failed now passes; they are marked in the test files.
+  <a href="mcts.html">How MCTS, RAVE and AlphaGo's networks relate (in Chinese)</a>.</p>
 
   <h3>An owl pattern condition that never applied</h3>
   <p>Pattern VA32 in <code>owl_vital_apats.db</code> has a constraint written as
@@ -193,8 +213,10 @@
 
   <h2 id="compat">Compatibility</h2>
   <ul>
-    <li>GTP and GMP clients work exactly as before: the commands, responses and
-      command-line options are the same.</li>
+    <li>GTP and GMP clients work exactly as before: the commands and responses are the
+      same, and so are the command-line options, apart from the new
+      <code>--no-monte-carlo</code> and <code>--mc-rave</code>. To get 3.8's moves on
+      small boards, add <code>--no-monte-carlo</code>.</li>
     <li>The program still reports <code>GNU Go 3.8</code>. Releases of this repository are
       numbered 3.8.1 and up.</li>
     <li>The license is unchanged: GPL version 3 or later, with the more permissive

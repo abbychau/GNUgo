@@ -335,20 +335,29 @@ GNU Go will resign lost games. This is the default.
 
 @subsection Monte Carlo Options
 
-GNU Go can play Monte Carlo Go on a 9x9 board.  (Not
+GNU Go can play Monte Carlo Go on boards up to 9x9.  (Not
 available for larger boards.) It makes quite a strong
-engine. Here are the command line options.
+engine: by default it is used on 7x7 to 9x9 boards, where
+it is clearly stronger than the classic move generator, and
+the classic engine is used on all other boards. Here are
+the command line options.
 
 @itemize
 @item @option{--monte-carlo}
 @quotation
-Use Monte Carlo move generation (9x9 or smaller).
+Always use Monte Carlo move generation. Board sizes larger
+than 9x9 are then refused.
+@end quotation
+@item @option{--no-monte-carlo}
+@quotation
+Never use Monte Carlo move generation; play with the classic
+engine on every board size, as GNU Go 3.8 did by default.
 @end quotation
 @item @option{--mc-games-per-level <number>}
 @quotation
-Number of Monte Carlo simulations per level. Default 8000.
-Thus at level 10, GNU Go simulates 80,000 games in order
-to generate a move.
+Number of Monte Carlo simulations per level. Default 1000
+(8000 in GNU Go 3.8). Thus at level 10, GNU Go simulates
+10,000 games in order to generate a move.
 @end quotation
 @item @option{--mc-rave <k>}
 @quotation
