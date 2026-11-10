@@ -262,7 +262,17 @@ def main():
                     help="exit 1 if A's score fraction is below this")
     ap.add_argument("-q", "--quiet", action="store_true",
                     help="no per-game lines")
-    args = ap.parse_args()
+    # argparse takes a value starting with "-" for an option, so
+    # "--args-a --monte-carlo" would fail; join such pairs as --args-a=...
+    argv, i = [], 1
+    while i < len(sys.argv):
+        if sys.argv[i] in ("--args-a", "--args-b") and i + 1 < len(sys.argv):
+            argv.append(f"{sys.argv[i]}={sys.argv[i + 1]}")
+            i += 2
+        else:
+            argv.append(sys.argv[i])
+            i += 1
+    args = ap.parse_args(argv)
     args.args_a = shlex.split(args.args_a)
     args.args_b = shlex.split(args.args_b)
     if args.level_b is None:
