@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>從 GNU Go 到 AlphaGo</title>
+<meta name="description" content="GNU Go 3.8、蒙地卡羅樹搜尋（MCTS）、RAVE、策略網絡與價值網絡之間的關係，以及這個倉庫為甚麼在 WebAssembly 上選擇 RAVE 而不是神經網絡。">
+<style>
+  :root {
+    --bg: #f4f1ea; --fg: #222; --muted: #6b6558; --panel: #fffdf8; --border: #d8d1c2;
+    --accent: #2f6f4e; --code: #ece6d8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17181a; --fg: #e8e6e1; --muted: #9a958a; --panel: #212226; --border: #34363b;
+            --accent: #5fb38a; --code: #2b2c31; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.8 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei",
+               "PingFang TC", "Noto Sans TC", sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 16px 64px; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; margin-bottom: 28px; }
+  a { color: var(--accent); }
+  h1 { font-size: 28px; line-height: 1.3; margin: 0 0 8px; }
+  h2 { font-size: 20px; margin: 44px 0 10px; padding-top: 4px; }
+  h3 { font-size: 16px; margin: 24px 0 4px; }
+  .lead { color: var(--muted); font-size: 17px; margin: 0 0 24px; }
+  code { font: 0.9em ui-monospace, Consolas, monospace; background: var(--code);
+         padding: 1px 5px; }
+  .formula { background: var(--panel); border: 1px solid var(--border);
+             padding: 2px 14px; margin: 12px 0; overflow-x: auto; overflow-y: hidden; }
+  .katex { font-size: 1.08em; }
+  .table { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border);
+           background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-top: 1px solid var(--border); }
+  thead th { border-top: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+  tbody th { font-weight: 600; white-space: nowrap; }
+  td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .note { background: var(--panel); border: 1px solid var(--border);
+          padding: 12px 16px; margin: 20px 0; }
+  .note p { margin: 0; }
+  .note p + p { margin-top: 8px; }
+  ol { padding-left: 22px; }
+  li { margin: 6px 0; }
+  .muted { color: var(--muted); }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border);
+           color: var(--muted); font-size: 14px; }
+  footer ul { padding-left: 22px; }
+  footer li { margin: 2px 0; }
+  strong { font-weight: 2000; }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script>
+  // Formulas are written as \[ ... \] (display) and \( ... \) (inline).
+  // Without the CDN the TeX source stays visible, which is still readable.
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.renderMathInElement) return;
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: "\\[", right: "\\]", display: true },
+        { left: "\\(", right: "\\)", display: false }
+      ],
+      throwOnError: false,
+      strict: false
+    });
+  });
+</script>
+</head>
+<body>
+<main>
+  <nav aria-label="Site">
+    <a href="./">在瀏覽器對弈</a>
+    <a href="differences.html">與 GNU Go 3.8 的分別</a>
+    <a href="manual/">使用手冊</a>
+    <a href="https://github.com/abbychau/GNUgo">GitHub 原始碼</a>
+  </nav>
+
+  <h1>從 GNU&nbsp;Go 到 AlphaGo：MCTS、RAVE、策略網絡與價值網絡</h1>
+  <p class="lead">談到電腦圍棋，很多人會把 GNU Go、蒙地卡羅樹搜尋（MCTS）、RAVE 和 AlphaGo
+  的兩個神經網絡，看成幾樣互不相干的技術，好像一樣取代了另一樣。其實如果把它們放在一起看，會發現它們做的可能其實是同樣的幾件事。這篇文章嘗試由這個角度把各個時代的工具串起來，解釋一下到底甚麼被取代了，又甚麼留了下來。順帶解釋這個GnuGo Fork 加入RAVE 的原因。</p>
+
+  <h2 id="mcts">MCTS 是怎樣運作的</h2>
+  <p>蒙地卡羅樹搜尋（MCTS）是後面<strong>所有方法</strong>共用的骨架，所以先從它講起。它的出發點和傳統(2005年前)的圍棋程式很不一樣：
+  它不需要事先知道好棋長甚麼樣子，而是靠大量試下去累積經驗。
+  程式會在記憶體裡建一棵搜尋樹，Root 是目前的局面，每個分枝代表一手棋，然後不斷重複以下四個步驟，每重複一次叫做一次<strong>模擬</strong>：</p>
+  <ol>
+    <li>由Root 出發，按照一條公式(見下文)在每一層選一個子節點往下走，直到走到樹的邊緣(末端的子節點)為止；</li>
+    <li>在邊緣加入一個新的節點，代表上一手沒有試過的棋；</li>
+    <li>由這個新局面開始，讓雙方近乎隨機的方法快速地把棋下完。最多只用一些簡單的棋形來避免太離譜的下法，下完之後按中國規則數子，得出這一局的勝負；</li>
+    <li>把這個勝負結果沿着剛才走過的路徑傳回去，更新路上每個節點的勝率統計。</li>
+  </ol>
+  <p>四個步驟之中，最關鍵的是第一步：每到一個節點，應該往哪一個子節點(也就是哪一手棋)走下去？</p>
+  
+  <p>而這就是<strong>UCT</strong> 要回答的問題。</p>
+
+  <h3 id="uct">UCT 又是甚麼呢</h3>
+  <p>首先，測試成本總是有限的，那麼分配測試成本要有取捨之法。</p>
+  <p>UCT 是 Upper Confidence bounds applied to Trees 的縮寫 (中文: 用在搜尋樹上的信賴上界/UCB)。
+  要明白它，可以先想像一個例子：你面前有幾部吃角子老虎機，每部的中獎率都不同，但你不知道是多少，只能靠自己一次一次地拉來摸索。如果你每次都只拉目前看來最好的那一部，可能會錯過一部只是開頭運氣差、但其實整體中獎率更好的機器；
+  如果你平均地每部都拉，又會浪費很多次在明顯不好的機器上。這在數學上叫「<a href="https://zh.wikipedia.org/zh-hant/%E5%A4%9A%E8%87%82%E8%B5%8C%E5%8D%9A%E6%9C%BA">多臂賭博機問題</a>」（multi-armed bandit），
+  問題的核心是在<strong>利用</strong>（拉已知最好的）和<strong>探索</strong>（試還不夠了解的）之間取得平衡。</p>
+  <p>Auer 等人在 2002 年提出了一個簡單而有效的做法，叫 <a href="https://people.eecs.berkeley.edu/~russell/classes/cs294/s11/readings/Auer+al:2002.pdf">UCB1</a>：不看每部機器目前的平均回報，而是看「最樂觀的可能」有多好。一部機器被拉的次數愈少，我們對它的了解就愈不確定，它的上界就應該留得愈寬。<em>有點像統計學上對平均值的信賴區間，樣本數愈少，信賴區間就愈寬。期權目標的波動越大，價格就愈貴，道理上也差不多</em>。</p>
+  <p>
+  每次都去拉上界最高的那一部，就會自然地兼顧利用和探索。2006 年，Kocsis 和 Szepesvári 想到，
+  搜尋樹裏的每一個節點其實都是這樣一組老虎機：每一手可下的棋就是一部機器，每次模擬的勝負就是一次回報。
+  <strong>把 UCB1 用在樹的每一層，就是 UCT</strong>。用在圍棋上，公式是：</p>
+  <div class="formula">\[ \text{分數} = \text{勝率} + c\sqrt{\frac{\ln N}{n}} \]</div>
+  <p>公式裡的 \(N\) 是父節點累積的模擬次數，\(n\) 是這一手棋本節點的模擬次數，\(c\) 是一個常數，用來調節探索的比重。前半部分的勝率代表「利用」，令程式傾向走表現好的棋；後半部分代表「探索」，一手棋被試得愈少，\(n\) 愈小，這部分就愈大。</p>
+  <p>舉個例子：假設某個局面已經做了 110 次模擬，其中 A 這手棋試了 100 次，贏了 60 次，勝率 60%；
+  B 這手棋只試了 10 次，贏了 5 次，勝率 50%。如果 \(c\) 取 0.5，A 的分數大約是 0.60 + 0.11 = 0.71，
+  B 的分數大約是 0.50 + 0.34 = 0.84。雖然 B 目前的勝率較低，但因為它試得太少，UCT 下一次仍然會選 B，給它多一點機會。
+  如果 B 再試下去勝率還是偏低，它的探索分數會隨着 \(n\) 增加而縮小，程式就會重新把注意力放回 A 身上。
+  由於 \(\ln N\) 增長得很慢，差的棋不會被完全放棄，但被重新嘗試的次數會愈來愈少。</p>
+  <p>因此，MCTS 和 UCT 的關係很清楚了：MCTS 是「選擇（Selection，根據UCB1 選擇）、擴展（Expansion，擴展子節點）、模擬（Simulation，快速走子）、回傳（Backpropagation，回傳勝負結果）」這整個框架，UCT 則是框架中第一步用來選擇的規則。
+  人們常說的「UCT 搜尋」，指的就是用 UCT 作選擇規則的 MCTS。搜尋結束時，程式最後選出的通常不是分數最高的一手，而是被模擬得最多的那一手，因為次數多代表 UCT 反覆確認過它是好棋。
+  後面要談的 RAVE 和 AlphaGo 的 PUCT，其實都是在這條公式上加東西，針對「先試哪一手」這個問題而作出的修改。</p>
+  <p>MCTS 在 2006 年前後由 Rémi Coulom 的 Crazy Stone 和 Kocsis、Szepesvári 提出的 UCT 演算法帶起，法國的 MoGo 隨後在 9×9 棋盤上下到接近職業棋手的水平，令整個電腦圍棋界轉向這個方向。
+  它的弱點在於隨機對局本身看不懂需要精確計算的局面，例如死活、對殺和打劫，而且棋盤愈大，
+  隨機下出來的棋局和真實棋局的差距就愈大，所以在 19×19 上的進步比在 9×9 上慢得多，甚至不好利用。(下面有實驗數據)</p>
+
+  <h2 id="overview">AI圍棋 In common</h2>
+  <p>
+    那麼先寫一個小結：所有的AI圍棋都是在做同一件事：挑好點，然後作搜尋和比較。只不過用了不同的方法。記住這個概念，那我這篇文章就算不白寫了。
+  </p>
+  <p>
+    電腦下一步棋，大致要做的三件事：
+  </p>
+  <ol>
+    <li>在幾十到幾百個可下的點之中，找出值得認真考慮的那幾個；</li>
+    <li>對這些候選手往下推演，比較誰比較好；</li>
+    <li>在推演到某個局面時，判斷這個局面對哪一方有利。</li>
+  </ol>
+  <p>圍棋之所以難，是因為三件事都難：可下的點太多，不知到把推演資源分配給誰，而局面的好壞又很難用簡單的規則算出來。</p>
+  <p>現在有了 MCTS 和 UCT 的概念，那麼我們就可以把幾個系統放在一起比較。AlphaGo 的做法常被簡化成「神經網絡下棋」，但實際上它的骨架仍然是 MCTS。</p>
+  <ol>
+    <li>策略網絡先替每個點打分，告訴搜尋哪些點像是好棋；</li>
+    <li>MCTS 隨後把大部分模擬次數花在這些點上，逐步比較它們；</li>
+    <li>推演到某個局面時，再由價值網絡判斷形勢。</li>
+  </ol>
+  <p>也就是說，AlphaGo 同樣是先選好點，再跑 MCTS。從這個角度看，RAVE 的位置就很清楚了。<strong>在沒有神經網絡的年代，MCTS 一樣需要有人告訴它哪些點值得先試</strong>，
+  而 RAVE 就是在搜尋過程中，從大量隨機對局的統計裡，即時估算出這份答案。它實際上是在代替策略網絡的工作，
+  只不過資料不是事先從數百萬盤棋學來的，而是當下這個局面裏邊下邊學的。同樣地，隨機下到終局再數子，就是在代替價值網絡。下表把幾個系統按這三件事排列出來：</p>
+  <div class="table">
+    <table>
+      <thead><tr><th scope="col">系統</th><th scope="col">誰負責挑好點</th><th scope="col">怎樣比較候選手</th><th scope="col">誰負責判斷局面</th></tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row">GNU Go 3.8 (19x19, 預設)</th>
+          <td>手寫的棋形庫、定式庫和佈局庫</td>
+          <td>對個別棋塊做戰術計算（讀秒、owl 死活）</td>
+          <td>人手寫的影響力函數和死活判斷，折算成目數</td></tr>
+        <tr><th scope="row">GNU Go 3.8 <br />蒙地卡羅模式 (用於9x9)</th>
+          <td>用UCT 逐手試；模擬時基於 3×3 棋形分析</td>
+          <td>MCTS（UCT）</td><td>隨機下到終局數子</td></tr>
+        <tr style="border:2px solid white;">
+          <th scope="row">本Fork：MCTS + RAVE</th>
+          <td>RAVE，模擬中即時統計</td>
+          <td>MCTS（UCT 加 RAVE）</td>
+          <td>隨機下到終局數子</td></tr>
+        <tr>
+          <th scope="row">AlphaGo（2016）</th>
+          <td>策略網絡（Policy Network）</td>
+          <td>MCTS（PUCT，加入了策略網絡的 UCT，見後文）</td>
+          <td>價值網絡與快速隨機對局各佔一半</td></tr>
+        <tr>
+          <th scope="row">AlphaGo Zero、KataGo</th>
+          <td>同一個神經網絡的策略輸出</td>
+          <td>MCTS（PUCT）</td>
+          <td>同一個神經網絡的價值輸出分數，不再隨機下到終局</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>註：owl engine 是 GNU Go 中用來判斷棋塊死活的程式。基於<a href="https://link.springer.com/chapter/10.1007/11674399_8">Goal-Directed Alpha-Beta Search</a>。</p>
+  <p>表中由第二行開始，中間那一欄其實沒有怎樣變過，變的是兩旁：負責挑好點和判斷局面的部分，由人手寫的規則，變成搜尋時即時統計，再變成事先訓練好的神經網絡。以下按這個次序逐一介紹。</p>
+
+  <h2 id="gnugo">GNU Go 3.8 的經典引擎</h2>
+  <p>GNU Go 的主引擎早在 MCTS 流行之前已經成形，屬於所謂「知識型」的圍棋程式，也是我下過最多的引擎之一，回想起以前拿著Palm 4.1 玩它算是我以前最愛的「手遊」了。它下每一步之前，
+  會先把棋盤上的棋子分成一條條的龍（廣義的連塊，有趣的是程式碼中龍就叫 dragon），用專門的戰術計算（<a href="https://github.com/abbychau/GNUgo/blob/master/src/engine/reading.c">reading.c</a>）判斷一串棋能不能被吃掉，
+  再用叫做 owl engine 判斷一整條大龍的死活，然後用影響力函數（十分十分好用的函數，值得每個棋手學習）估算雙方的勢力範圍和實地。
+  候選手則來自上千條人手寫的棋形（在 <a href="https://github.com/abbychau/GNUgo/tree/master/patterns">patterns/*.db</a> 檔案裏），以及定式和佈局的資料庫。
+  每一手候選棋都會附上它的「理由」，例如救活自己的棋、吃掉對方的棋、圍地或者破空，
+  最後程式把這些理由折算成目數，選出數值最大的一手。</p>
+  <p>這種做法有它的好處：速度快，而且每一步棋都可以追溯到具體的理由，開發者看得懂程式為甚麼這樣下。
+  但壞處同樣明顯。所有知識都要由人逐條寫進去，寫漏了的情況就會變成盲點，而各種理由之間的權重也很難調得一致，改好了一個局面，往往又令另一個局面變差。我這個fork 的regression test 至今仍有<strong>大約 160 個</strong>已知會失敗的局面，大部分都屬於這一類問題。</p>
+
+  <h2 id="gnugo-mc">GNU Go 3.8 的蒙地卡羅模式</h2>
+  <p>GNU Go 在 3.8 版也加入了一個簡單的 MCTS，用 <code>--monte-carlo</code> 開啟，只支援 9×9 或更小的棋盤。
+  它在模擬時用 3×3 的棋形來引導落子（<code>--mc-patterns</code> 可以選擇 <code>mc_mogo_classic</code>
+  等幾套內建棋形），每步預設做 8000 乘以等級那麼多次模擬，在等級 10 即是八萬次。
+  值得一提的是，這個模式並不是完全拋開經典引擎：程式會先照常跑一次經典的著手生成，
+  如果經典引擎選中的是佈局庫裏的棋就直接採用，否則才交給 MCTS 重新決定，而經典引擎判斷為已經確定的地域，MCTS 也不會再去下。不過在 MCTS 內部，哪些點值得先試，基本上仍然要靠 UCT 一手一手去摸索，沒有甚麼現成的指引。</p>
+
+  <h2 id="rave">RAVE：在搜尋中即時學出來的策略網絡的替代品</h2>
+  <p>純 UCT 的問題在於起步太慢。一個新節點底下有幾十個可下的點，每一點都要被試過好幾次，統計才開始有意義，
+  在這之前搜尋差不多是在亂猜。RAVE（Rapid Action Value Estimation）就是為了解決這個問題。
+  它借用了一個叫 AMAF（all moves as first）的想法：在一局模擬之中，只要某一方在某個點下過棋，
+  不論是第幾手才下的，都當作「如果一開始就下在這裏」來記一筆勝負。這個想法最早可以追溯到 Brügmann 在 1993 年寫的 Monte Carlo Go[1]。這樣一來，每一局模擬就不只更新一手棋的統計，而是同時更新幾十個點，
+  新節點很快就能知道哪些點大概是好棋。</p>
+  <p>當然，AMAF 的統計並不準確，同一個點早下和遲下，意義可以差很遠。所以 RAVE 會把兩種統計混合起來：
+  一手棋自己被模擬的次數還少時，主要參考 AMAF 的勝率；次數多了，就逐漸改為相信這手棋自己的真實勝率。
+  Gelly 和 Silver 在 2007 年為 MoGo 提出的混合方式如下：</p>
+  <div class="formula">\[ \begin{aligned} \text{值} &= (1-\beta)\cdot\text{勝率} + \beta\cdot\text{AMAF 勝率} \\ \beta &= \sqrt{\frac{k}{3n+k}} \end{aligned} \]</div>
+  <p>這裏的 \(k\) 決定 AMAF 的影響維持多久，大約在一手棋自己累積到 \(k\) 次模擬時，兩種勝率各佔一半。
+  這個Repo 把 RAVE 加進了 GNU Go 的 UCT 搜尋，用 <code>--mc-rave &lt;k&gt;</code> 設定，預設值是 1000，
+  設成 0 就會回到 GNU Go 3.8 原本的純 UCT。</p>
+  <p>如果把 RAVE 和 AlphaGo 放在一起比較，它的角色其實就是策略網絡：兩者都是在搜尋還沒累積足夠經驗之前，
+  先告訴它哪些點值得優先嘗試。分別在於策略網絡的知識是事先從大量棋譜和自我對弈中學來的，帶到任何局面都可以用；
+  而 RAVE 的知識是在當下這個局面裏，靠成千上萬局隨機對局臨時統計出來的，搜尋結束後就丟掉。
+  前者準確得多，但需要訓練好的網絡和足夠的計算力；後者粗糙，但甚麼都不需要。聽起來有點反直覺，但仔細想想應該不難理解。</p>
+
+  <h3 id="results">這個GnuGo Fork 的實測結果</h3>
+  <p>以下的數字是用倉庫裏的 <code>tests/tools/match.py</code> 在 9×9 棋盤（貼 7.5 目）上對局得出的。
+  每一項下 200 局，每個隨機開局黑白各下一次，以抵消開局本身的偏差。對手是同一個Build 的經典引擎
+  （<code>--no-monte-carlo</code>, Level 10），在Intel 13700KF 上每步大約需要 0.35 秒。</p>
+  <div class="table">
+    <table>
+      <thead><tr><th scope="col">蒙地卡羅設定</th><th scope="col">每步模擬</th><th scope="col">每步時間</th><th scope="col">得分</th><th scope="col">Elo（95% 區間）</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">3.8 的純 UCT</th><td class="num">80,000</td><td class="num">約 3.5 秒</td><td class="num">72.5%</td><td class="num">+168（+118 至 +218）</td></tr>
+        <tr><th scope="row">UCT + RAVE</th><td class="num">80,000</td><td class="num">約 3.6 秒</td><td class="num">86.5%</td><td class="num">+323（+250 至 +391）</td></tr>
+        <tr><th scope="row">UCT + RAVE</th><td class="num">10,000</td><td class="num">約 0.6 秒</td><td class="num">73.5%</td><td class="num">+177（+122 至 +231）</td></tr>
+        <tr><th scope="row">UCT + RAVE</th><td class="num">5,000</td><td class="num">約 0.4 秒</td><td class="num">58.5%</td><td class="num">+60（+15 至 +105）</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>在模擬次數相同的情況下，加了 RAVE 之後對經典引擎的優勢幾乎翻了一倍，而即使把模擬次數減到和經典引擎差不多的思考時間，
+  蒙地卡羅一方仍然較強。在 7×7 棋盤上結果相近（+241 Elo），到了 5×5 則雙方打成平手
+  （−7 Elo，區間 −57 至 +42），因為棋盤小到經典引擎已經算得很清楚。</p>
+  <p>19×19 的結果則完全相反。我們把只限 9×9 的限制拿走，讓設定 MCTS + RAVE @ 每步10000模擬，約 1.6 秒，和同一程式的經典引擎下了 40 局，蒙地卡羅一方只贏了 1 局（得分 2.5%，約 −636 Elo，95% 區間 −860 至 −285），
+  輸掉的 39 局之中有 36 局是它自己認輸的。原因不難理解：19×19 有三百多個可下的點，一萬次模擬平均分到每個點只有二三十次，RAVE 也幫不了多少；隨機下完一盤 19×19 的棋和真實棋局的差距遠大於 9×9，用這種結果去推翻經典引擎憑棋理選出的棋，往往是越改越差。這也說明了為甚麼 GNU Go 3.8 當年把蒙地卡羅模式限制在 9×9，以及為甚麼 MCTS 要等到有了策略網絡和價值網絡，才真正在大棋盤上超越知識型的程式。</p>
+  <h3 id="defaults">預設設定</h3>
+  <p>根據以上的對局結果，這個倉庫按棋盤大小自動決定用哪一個引擎。GNU Go 3.8 原本預設所有棋盤都用經典引擎，
+  要加上 <code>--monte-carlo</code> 才會改用蒙地卡羅；現在則是在蒙地卡羅明顯較強的棋盤上自動開啟，其餘棋盤維持經典引擎。
+  RAVE 是蒙地卡羅搜尋的一部分，所以只有在用蒙地卡羅的棋盤上才會用到。</p>
+  <div class="table">
+    <table>
+      <thead><tr><th scope="col">棋盤</th><th scope="col">預設引擎</th><th scope="col">根據</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">6×6 或以下</th><td>經典引擎</td><td>5×5 上兩者打和；4×4 的測試局面按日本規則計算，小局面下經典引擎的算法十分準確</td></tr>
+        <tr><th scope="row">7×7 至 9×9</th><td>MCTS + RAVE</td><td>9×9 上 +177 Elo（每步一萬次模擬），7×7 上在同等用時下 +241 Elo</td></tr>
+        <tr><th scope="row">10×10 至 19×19</th><td>經典引擎</td><td>19×19 上 −636 Elo；10×10 至 13×13 未有實測，按 19×19 的結果推斷</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>用蒙地卡羅時，每步的模擬次數是「每級模擬次數」x 等級。這個Fork 把每級模擬次數由 3.8 的 8000 次減到 1000 次，
+  所以在預設的等級 10 每步大約做一萬次模擬，在一般電腦上約需和經典引擎的速度相近的 0.6 秒，在瀏覽器(這個fork 新加的wasm build)裡也不會等太久；
+  調低等級時模擬次數會按比例減少，棋力和速度會同時下降。以下幾個命令列選項可以改變這些預設：</p>
+  <div class="table">
+    <table>
+      <thead><tr><th scope="col">選項</th><th scope="col">作用</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>--no-monte-carlo</code></th><td>所有棋盤都用經典引擎，即 GNU Go 3.8 原本的下法</td></tr>
+        <tr><th scope="row"><code>--monte-carlo</code></th><td>強制使用蒙地卡羅；和 3.8 一樣，只接受 9×9 或以下的棋盤</td></tr>
+        <tr><th scope="row"><code>--mc-games-per-level &lt;n&gt;</code></th><td>每級的模擬次數，預設 1000（3.8 為 8000）；調高會更強，但每步更慢</td></tr>
+        <tr><th scope="row"><code>--mc-rave &lt;k&gt;</code></th><td>RAVE 公式中的 \(k\)，預設 1000；設為 0 即不用 RAVE，回到 3.8 的純 UCT</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="alphago">AlphaGo</h2>
+  <p>AlphaGo 的方法是先用策略網絡挑好點，再跑 MCTS。策略網絡的輸入是一個局面，輸出是棋盤上每一個點的落子機率。AlphaGo 在 2016 年的版本先用大量人類職業棋手的棋譜訓練它，
+  讓它學會模仿高手會下在哪裏，之後再用自我對弈進一步強化。在搜尋裏，AlphaGo 把 UCT 改成了 PUCT：</p>
+  <div class="formula">\[ \text{分數} = \text{勝率} + c \cdot P \cdot \frac{\sqrt{N}}{1+n} \]</div>
+  <p>公式裡多出來的 \(P\) 就是策略網絡給這手棋的機率。一手棋被試的次數還少時，後半部分佔主導，
+  而它的大小取決於 \(P\)：網絡覺得像好棋的點會先被試，網絡覺得不像的點幾乎不會被理會。
+  所以整個流程其實是先由策略網絡挑出好點，再讓 MCTS 在這些點之間反覆比較，這和前面所說 RAVE 的角色完全一樣，
+  只是挑得準確得多。也因為這樣，有了策略網絡之後，RAVE 就再沒有用處了。</p>
+  <p>細心的同學會留意到這裡N 的成長是sqrt N 而不是 lnN ，原因有點複雜，但可以理解為 PUCT 中 先驗概率P(s,a) 已經把探索項調控了。那不能 P*sqrt(lnN/(1+n)) 嗎？的確可以，但收斂太快不好用。這完全是DeepMind 在2011 年的實驗得出來的結果。但原理其實也不能感受到。</p>
+  <p>還有一個有趣的細節：AlphaGo 最初的版本在 MCTS 裏仍然保留隨機對局，而用來引導這些對局的，
+  是一個很小、很快的棋形模型，作用和 GNU Go 的 <code>mc_mogo_classic</code> 這類 3×3 棋形基本相同。</p>
+
+  <h2 id="value">價值網絡(Value Network)</h2>
+  <p>AlphaGo 的價值網絡的輸入同樣是一個局面，但它輸出的是<strong>一個</strong>數字：目前輪到的一方大概有多少勝率。
+  它要取代的是 MCTS 裏最慢、也最不可靠的一步，即是隨機把棋下完再數子。AlphaGo 在 2016 年的版本把價值網絡的判斷和隨機對局的結果各佔一半混合使用；
+  到了 2017 年的 AlphaGo Zero，隨機對局被完全拿走，策略和價值也合併成同一個網絡的兩個輸出，
+  而且訓練時不再使用任何人類棋譜，只靠自我對弈。其後的 Leela Zero 和 KataGo 都沿用了這個架構，
+  KataGo 還多加了預測目數和每一點最終歸屬的輸出，令它在形勢判斷上更加細緻。</p>
+  <p>回頭看 GNU Go，它用人手寫的影響力函數和死活判斷去估算目數，其實也是在做價值網絡的工作；
+  MCTS 改用隨機對局去「抽樣」判斷，價值網絡則把這種判斷變成可以事先學習的東西，一次計算就頂得上成千上萬局隨機模擬。</p>
+
+  <h2 id="why-not-nn">為甚麼這個倉庫不用神經網絡</h2>
+  <p>看到這裏，自然會問：既然策略網絡和價值網絡都比 RAVE 和隨機對局好，為甚麼不直接加進來？
+  主要原因是這個倉庫有一個很重要的目標，就是編譯成 WebAssembly，讓 GNU Go 可以在任何網頁上直接運行。
+  在瀏覽器裡，程式通常只能用 CPU 計算，沒有顯示卡可以借用。粗略估算，一個屬於「小型」的圍棋網絡（例如 6 層、每層 96 個通道），在 19×19 棋盤上評估一個局面大約需要數億次乘加運算，
+  在瀏覽器的 CPU 上每秒大概只能評估幾十個局面，就算換成 9×9，也不過每秒一兩百個。
+  相比之下，RAVE 在 0.6 秒內就可以跑完一萬局隨機模擬。</p>
+  <p>如果為了速度把網絡(例如利用WebGPU)再縮小，問題又會反過來：網絡太小時，它給的落子機率和勝率判斷都不夠準。不準的策略網絡會把搜尋引到錯誤的點上，而由於 PUCT 很少去試網絡看不上的點，搜尋往往沒有機會自己糾正過來；不準確的價值網絡則會在每一個子節點中都給出錯誤的判斷。在只能做很少次的評估的情況下，這樣的組合效果反而可能比RAVE 加隨機模擬更弱（我挺確信的，如果真要答案可以催我）。RAVE 雖然粗糙，但它的統計全部來自當前這個局面，不會帶着別處學來的偏見。</p>
+  <p>除此之外，要加入神經網絡，還需要一份訓練好、授權與 GPL 相容、而且大小適合放進網頁的權重，自己訓練的成本也相當高。而真正想要職業水平的話，KataGo 和 Leela Zero 這些成熟的開源實作已經存在。
+  所以這個倉庫的取捨是：在小棋盤上用 MCTS 加 RAVE，讓 GNU Go 在瀏覽器裏也能下出明顯更強的棋，同時保持程式細小、快速，而且每一步都仍然有完全的可解釋性，而這神經網絡是不能提供的。</p>
+
+  <footer>
+    <p>參考文獻</p>
+    <ul>
+      <li>B. Brügmann, <cite>Monte Carlo Go</cite>, 1993. <a href="https://users.ics.aalto.fi/praiko/papers/mcgo/mcgo.pdf" target="_blank">Link</a></li>
+      <li>P. Auer, N. Cesa-Bianchi, P. Fischer, <cite>Finite-time Analysis of the Multiarmed Bandit Problem</cite>, Machine Learning, 2002. <a href="https://link.springer.com/article/10.1023/A:1013689704352" target="_blank">Link</a></li>
+      <li>R. Coulom, <cite>Efficient Selectivity and Backup Operators in Monte-Carlo Tree Search</cite>, 2006.</li>
+      <li>L. Kocsis, C. Szepesvári, <cite>Bandit based Monte-Carlo Planning</cite>, 2006.</li>
+      <li>S. Gelly, D. Silver, <cite>Combining Online and Offline Knowledge in UCT</cite>, ICML 2007.</li>
+      <li>D. Silver 等, <cite>Mastering the game of Go with deep neural networks and tree search</cite>, Nature, 2016.</li>
+      <li>D. Silver 等, <cite>Mastering the game of Go without human knowledge</cite>, Nature, 2017.</li>
+      <li>D. J. Wu, <cite>Accelerating Self-Play Learning in Go</cite>（KataGo）, 2019.</li>
+    </ul>
+    <p>對局數據由本倉庫的 <code>tests/tools/match.py</code> 產生，用法見
+    <a href="https://github.com/abbychau/GNUgo/blob/master/tests/README">tests/README</a>。</p>
+  </footer>
+</main>
+</body>
+</html>
